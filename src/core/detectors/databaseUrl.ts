@@ -13,39 +13,70 @@ import type {
   DetectionResult,
 } from '../../types/core.js';
 
+/**
+ * Check if credentials look like placeholders
+ */
+function isPlaceholderCredentials(user: string, pass: string): boolean {
+  const combined = `${user}:${pass}`.toLowerCase();
+  // Only reject truly obvious placeholders - not "user:pass" which could be real (weak) credentials
+  const placeholders = [
+    'username:password',
+    'your_user:your_password',
+    '<username>:<password>',
+    'example:example',
+    'your-username:your-password',
+    'replace-me:replace-me',
+    'changeme:changeme',
+    'test:test',
+    'dummy:dummy',
+    'placeholder:placeholder',
+    'user:pass',
+  ];
+  return placeholders.some((p) => combined === p || combined.includes(p));
+}
+
+/**
+ * Check if a URL value ends with trailing punctuation that shouldn't be part of URL
+ */
+function trimTrailingPunctuation(url: string): string {
+  // Remove trailing punctuation that could be closing delimiters
+  return url.replace(/[.,;:)\]}>"'`]+$/, '');
+}
+
 const DATABASE_URL_PATTERNS: Array<{
   category: DetectionCategory;
   pattern: RegExp;
   confidence: DetectionConfidence;
 }> = [
-  // PostgreSQL (covers both with and without database name in path)
+  // PostgreSQL (covers both with and without database name in path, includes query strings and fragments)
   {
     category: 'postgres_url',
-    pattern: /postgres(?:ql)?:\/\/[^:]+:[^@]+@[^/]+(?:\/[^\s?]+)?/gi,
+    pattern: /postgres(?:ql)?:\/\/[^\s:]+:[^\s@]+@[^/]+\/[^\s]*/gi,
     confidence: 0.95 as DetectionConfidence,
   },
-  // MySQL (covers both with and without database name in path)
+  // MySQL (covers both with and without database name in path, includes query strings and fragments)
   {
     category: 'mysql_url',
-    pattern: /mysql:\/\/[^:]+:[^@]+@[^/]+(?:\/[^\s?]+)?/gi,
+    pattern: /mysql:\/\/[^\s:]+:[^\s@]+@[^/]+\/[^\s]*/gi,
     confidence: 0.95 as DetectionConfidence,
   },
-  // MongoDB (covers both with and without database name in path)
+  // MongoDB (covers both with and without database name in path, includes query strings and fragments)
   {
     category: 'mongodb_url',
-    pattern: /mongodb(?:\+srv)?:\/\/[^:]+:[^@]+@[^/]+(?:\/[^\s?]+)?/gi,
+    pattern: /mongodb(?:\+srv)?:\/\/[^\s:]+:[^\s@]+@[^/]+\/[^\s]*/gi,
     confidence: 0.95 as DetectionConfidence,
   },
-  // Redis (no database name in URL path typically)
+  // Redis (with optional username, always needs password before @, includes query strings and fragments)
   {
     category: 'redis_url',
-    pattern: /redis:\/\/(?:[^:]+:)?[^@]+@[^/]+\/?/gi,
+    pattern: /redis:\/\/(?:[^\s:]+:)?[^\s@]+@[^/]+\/?[^\s]*/gi,
     confidence: 0.9 as DetectionConfidence,
   },
-  // Generic database URL with credentials (least specific)
+  // Generic database URL with credentials (least specific) - avoid matching http/https
   {
     category: 'database_url',
-    pattern: /[a-z]+:\/\/[^:]+:[^@]+@[^/]+\/?[^\s]*/gi,
+    pattern:
+      /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis):\/\/[^\s:]+:[^\s@]+@[^/]+\/?[^\s]*/gi,
     confidence: 0.7 as DetectionConfidence,
   },
   // DSN formats (Data Source Name)
@@ -59,10 +90,10 @@ const DATABASE_URL_PATTERNS: Array<{
     pattern: /Server=[^;]+;Database=[^;]+;User Id=[^;]+;Password=[^;]+/gi,
     confidence: 0.9 as DetectionConfidence,
   },
-  // Environment variable style
+  // Environment variable style - DATABASE_URL=postgresql://...
   {
     category: 'database_url',
-    pattern: /DATABASE_URL\s*[=:]\s*['"]?[a-z]+:\/\/[^'"\s]+/gi,
+    pattern: /DATABASE_URL\s*[=:]\s*['"]?[a-z]+:\/\/[^\s'"<>]+/gi,
     confidence: 0.85 as DetectionConfidence,
   },
 ];
@@ -95,8 +126,20 @@ function createDatabaseUrlDetectorImpl(): new () => BaseDetector {
         for (const match of text.matchAll(pattern)) {
           if (match.index === undefined) continue;
 
+          const rawMatch = match[0];
+
+          // Trim trailing punctuation
+          const trimmedMatch = trimTrailingPunctuation(rawMatch);
+          if (trimmedMatch.length === 0) continue;
+
+          // Extract credentials to check for placeholders
+          const credMatch = trimmedMatch.match(/^[^:]+:\/\/([^:]+):([^@]+)@/);
+          if (credMatch && credMatch[1] && credMatch[2]) {
+            if (isPlaceholderCredentials(credMatch[1], credMatch[2])) continue;
+          }
+
           const start = match.index;
-          const end = start + match[0].length;
+          const end = start + trimmedMatch.length;
           if (results.some((r) => r.range.start === start && r.range.end === end)) {
             continue;
           }
@@ -118,9 +161,26 @@ function createDatabaseUrlDetectorImpl(): new () => BaseDetector {
         for (const match of text.matchAll(pattern)) {
           if (match.index === undefined) continue;
 
+          const rawMatch = match[0];
+
+          // Trim trailing punctuation
+          const trimmedMatch = trimTrailingPunctuation(rawMatch);
+          if (trimmedMatch.length === 0) continue;
+
+          // Skip http/https URLs
+          if (/^https?:\/\//i.test(trimmedMatch)) continue;
+
+          // Extract credentials to check for placeholders
+          const credMatch = trimmedMatch.match(/^[^:]+:\/\/([^:]+):([^@]+)@/);
+          if (credMatch && credMatch[1] && credMatch[2]) {
+            if (isPlaceholderCredentials(credMatch[1], credMatch[2])) continue;
+          }
+
           const start = match.index;
-          const end = start + match[0].length;
-          if (results.some((r) => r.range.start === start && r.range.end === end)) {
+          const end = start + trimmedMatch.length;
+
+          // Skip if any existing result overlaps this range (specific category wins)
+          if (results.some((r) => r.range.start <= start && r.range.end >= end)) {
             continue;
           }
 

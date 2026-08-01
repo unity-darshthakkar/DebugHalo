@@ -116,6 +116,12 @@ export function confidence(value: number): DetectionConfidence {
 }
 
 /**
+ * Validation function for a detection match
+ * Returns true if the match is valid, false to reject
+ */
+export type DetectionValidator = (match: string, context: string) => boolean;
+
+/**
  * Source location of a detection within the input text
  */
 export interface SourceRange {
@@ -151,6 +157,8 @@ export interface DetectionResult {
   readonly detectorName: string;
   /** Optional context around the detection */
   readonly context?: string;
+  /** Human-readable reason for this detection (e.g., 'AWS secret key with context', 'GitHub PAT prefix ghp_') */
+  readonly reason?: string;
 }
 
 /**

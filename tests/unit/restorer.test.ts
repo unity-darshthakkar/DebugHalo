@@ -9,6 +9,7 @@ import {
   createRestorationManifest,
 } from '@/core/restorer.js';
 import { createAliasVault, getOrCreateAlias } from '@/core/aliasVault.js';
+import { sanitizeText } from '@/core/pipeline.js';
 import type { AliasVault } from '@/types/core.js';
 
 // Runtime-constructed test tokens to avoid GitHub push-protection triggers
@@ -248,6 +249,31 @@ MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQD
 
       expect(result1.restoredText).toBe(result2.restoredText);
       expect(result1.restored).toEqual(result2.restored);
+    });
+  });
+
+  describe('pipeline integration', () => {
+    it('should restore Auth_Token through full sanitize-restore cycle', async () => {
+      const token = 'auth_' + 'x'.repeat(32);
+      const input = `Auth_Token="${token}"`;
+
+      // Sanitize using pipeline
+      const sanitizeResult = await sanitizeText(input, { minConfidence: 0.5 });
+
+      // Original token should be absent from sanitized output
+      expect(sanitizeResult.sanitizedText).not.toContain(token);
+      expect(sanitizeResult.sanitizedText).toContain('Auth_Token="');
+      expect(sanitizeResult.sanitizedText).toContain('<');
+
+      // Restore using vault from pipeline
+      const restoreResult = restore(sanitizeResult.sanitizedText, {
+        vault: sanitizeResult.vault,
+      });
+
+      // Restored text should exactly equal original
+      expect(restoreResult.restoredText).toBe(input);
+      expect(restoreResult.complete).toBe(true);
+      expect(restoreResult.unresolved).toHaveLength(0);
     });
   });
 });

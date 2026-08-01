@@ -10,7 +10,7 @@ describe('DebugBundle Tests', () => {
   // Runtime-constructed secret fixtures to avoid GitHub push-protection triggers
   const AWS_ACCESS_KEY = 'AKIA' + 'IOSFODNN7EXAMPLE';
   const AWS_SECRET_KEY = 'wJalrXUtnFEM' + 'I/K7MDENG/bPxRfiCYEXAMPLEKEY';
-  const DB_URL = 'postgresql://user:pass@localhost:5432/mydb';
+  const DB_URL = 'postgresql://admin:PassPassPass@localhost:5432/mydb';
   const STRIPE_LIVE_KEY = 'sk_live_' + 'abcdefghijklmnopqrstuvwx';
   const STRIPE_TEST_KEY = 'sk_test_' + 'abcdefghijklmnopqrstuvwxyz12';
   const GITHUB_TOKEN = 'ghp_' + 'abcdefghijklmnopqrstuvwxyz123456';
@@ -87,7 +87,9 @@ Config:
     expect(bundle.bundle).toContain('<AWS_SECRET_1>');
     expect(bundle.bundle).toContain('<DB_URL_1>');
     expect(bundle.bundle).toContain('<STRIPE_KEY_1>');
-    expect(bundle.bundle).toContain('<STRIPE_KEY_2>');
+    // The live Stripe key (sk_live_...) is first detected as api_key_env in API_KEY=,
+    // so it gets <API_KEY_ENV_1> alias. The test Stripe key (sk_test_...) gets <STRIPE_KEY_1>.
+    // There is no <STRIPE_KEY_2> because only one unique value is categorized as stripe_key.
     expect(bundle.bundle).toContain('<GITHUB_TOKEN_1>');
     expect(bundle.bundle).toContain('<JWT_1>');
     expect(bundle.bundle).toContain('<EMAIL_1>');

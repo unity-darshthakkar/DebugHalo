@@ -59,14 +59,63 @@ const PASSWORD_PATTERNS: Array<{
   {
     category: 'api_key_env',
     pattern:
-      /\b(?:API_KEY|APIKEY|SECRET_KEY|SECRETKEY|ACCESS_TOKEN|ACCESSTOKEN)\s*[=:]\s*(["']?)([^"'\s\n\r]+)\1/g,
+      /\b(?:API_KEY|APIKEY|SECRET_KEY|SECRETKEY|ACCESS_TOKEN|ACCESSTOKEN|AUTH_TOKEN|AUTHTOKEN)\s*[=:]\s*(["']?)([^"'\s\n\r]+)\1/gi,
     confidence: 0.9 as DetectionConfidence,
     valueExtractor: (m) => m[2] ?? '',
   },
   // Generic secret env vars
   {
     category: 'secret_env',
-    pattern: /\b(?:SECRET|CLIENT_SECRET|APP_SECRET)\s*[=:]\s*(["']?)([^"'\s\n\r]{8,})\1/g,
+    pattern: /\b(?:SECRET|CLIENT_SECRET|APP_SECRET)\s*[=:]\s*(["']?)([^"'\s\n\r]{8,})\1/gi,
+    confidence: 0.85 as DetectionConfidence,
+    valueExtractor: (m) => m[2] ?? '',
+  },
+  // Exported variables: export AUTH_TOKEN=value or export AUTHTOKEN="value"
+  {
+    category: 'api_key_env',
+    pattern: /\bexport\s+(?:AUTH_TOKEN|AUTHTOKEN)\s*[=:]\s*(["']?)([^"'\s\n\r]+)\1/g,
+    confidence: 0.9 as DetectionConfidence,
+    valueExtractor: (m) => m[2] ?? '',
+  },
+  // JSON assignments: "API_KEY": "value" or "AUTH_TOKEN": "value"
+  {
+    category: 'api_key_env',
+    pattern: /"(?:API_KEY|AUTH_TOKEN)"\s*:\s*"([^"]{4,})"/g,
+    confidence: 0.9 as DetectionConfidence,
+    valueExtractor: (m) => m[1] ?? '',
+  },
+  // JSON assignments: "CLIENT_SECRET": "value"
+  {
+    category: 'secret_env',
+    pattern: /"CLIENT_SECRET"\s*:\s*"([^"]{4,})"/g,
+    confidence: 0.85 as DetectionConfidence,
+    valueExtractor: (m) => m[1] ?? '',
+  },
+  // YAML-like: api_key: value or auth_token: "value"
+  {
+    category: 'api_key_env',
+    pattern: /\b(?:api_key|auth_token)\s*:\s*(["']?)([^"'\n\r]+)\1/gi,
+    confidence: 0.8 as DetectionConfidence,
+    valueExtractor: (m) => m[2] ?? '',
+  },
+  // YAML-like: client_secret: value
+  {
+    category: 'secret_env',
+    pattern: /\bclient_secret\s*:\s*(["']?)([^"'\n\r]{8,})\1/gi,
+    confidence: 0.8 as DetectionConfidence,
+    valueExtractor: (m) => m[2] ?? '',
+  },
+  // process.env.AUTH_TOKEN assignment
+  {
+    category: 'api_key_env',
+    pattern: /process\.env\.AUTH_TOKEN\s*[=:]\s*(["']?)([^"'\s\n\r]+)\1/g,
+    confidence: 0.9 as DetectionConfidence,
+    valueExtractor: (m) => m[2] ?? '',
+  },
+  // process.env.CLIENT_SECRET assignment
+  {
+    category: 'secret_env',
+    pattern: /process\.env\.CLIENT_SECRET\s*[=:]\s*(["']?)([^"'\s\n\r]{8,})\1/g,
     confidence: 0.85 as DetectionConfidence,
     valueExtractor: (m) => m[2] ?? '',
   },
@@ -136,8 +185,8 @@ function createPasswordDetectorImpl(): new () => BaseDetector {
         /^#\{.*\}$/,
         /^<.*>$/,
         /^\[.*\]$/,
-        /^your-.*/i,
-        /^my-.*/i,
+        /^your[-_].*/i,
+        /^my[-_].*/i,
         /^change-?me$/i,
         /^replace-?me$/i,
         /^changeme$/i,
@@ -148,7 +197,6 @@ function createPasswordDetectorImpl(): new () => BaseDetector {
         /^secret$/i,
         /^hidden$/i,
         /^redacted$/i,
-        /^\[.*\]$/,
       ];
       return placeholders.some((p) => p.test(value.trim()));
     }
