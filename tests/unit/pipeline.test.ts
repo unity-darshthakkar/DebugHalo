@@ -293,6 +293,45 @@ api:
       expect(result.sanitizedText).not.toContain(awsKey);
       expect(result.detections.length).toBeGreaterThan(0);
     });
+
+    it('should detect and sanitize AWS access key through sanitizeText pipeline', async () => {
+      // Synthetic valid AWS access key (AKIA + 16 chars)
+      const awsAccessKey = 'AKIA' + 'X'.repeat(16);
+      const input = `AWS_ACCESS_KEY_ID=${awsAccessKey}`;
+
+      const result = await sanitizeText(input, { minConfidence: 0.5 });
+
+      // Should detect exactly one AWS access key
+      const awsDetections = result.detections.filter((d) => d.category === 'aws_access_key');
+      expect(awsDetections).toHaveLength(1);
+      expect(awsDetections[0]!.value).toBe(awsAccessKey);
+      expect(awsDetections[0]!.confidence).toBeGreaterThan(0.9);
+
+      // Should be sanitized
+      expect(result.sanitizedText).not.toContain(awsAccessKey);
+      expect(result.sanitizedText).toContain('<AWS_ACCESS_KEY_1>');
+    });
+
+    it('should detect and sanitize mixed-case Auth_Token', async () => {
+      const token = 'auth_' + 'x'.repeat(32);
+      const input = `Auth_Token="${token}"`;
+
+      const result = await sanitizeText(input, { minConfidence: 0.5 });
+
+      // Should detect exactly one api_key_env
+      const authDetections = result.detections.filter((d) => d.category === 'api_key_env');
+      expect(authDetections).toHaveLength(1);
+      expect(authDetections[0]!.value).toBe(token);
+
+      // Original token should be absent from sanitized output
+      expect(result.sanitizedText).not.toContain(token);
+
+      // Surrounding syntax should be preserved
+      expect(result.sanitizedText).toContain('Auth_Token="');
+
+      // Replacement alias should be present
+      expect(result.sanitizedText).toContain('<API_KEY_ENV_1>');
+    });
   });
 
   describe('detectOnly', () => {

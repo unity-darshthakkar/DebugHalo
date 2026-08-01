@@ -30,6 +30,7 @@ import { createEmailDetector } from './detectors/email.js';
 import { createInternalUrlDetector } from './detectors/internalUrl.js';
 import { createIpAddressDetector } from './detectors/ipAddress.js';
 import { createAwsSecretKeyDetector } from './detectors/awsSecretKey.js';
+import { createAwsAccessKeyDetector } from './detectors/awsAccessKey.js';
 import { createGithubTokenDetector } from './detectors/githubToken.js';
 import { createSlackTokenDetector } from './detectors/slackToken.js';
 import { createGenericSecretDetector } from './detectors/genericSecret.js';
@@ -67,9 +68,11 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   ssh_private_key: 100,
   pgp_private_key: 100,
   aws_secret_key: 95,
+  aws_access_key: 95,
   jwt: 90,
   github_token: 85,
   slack_token: 85,
+  bearer_token: 80,
   database_url: 80,
   mysql_url: 80,
   postgres_url: 80,
@@ -119,11 +122,12 @@ function initBuiltinDetectors(): void {
   registerBuiltinDetector(createInternalUrlDetector());
   registerBuiltinDetector(createIpAddressDetector());
   registerBuiltinDetector(createAwsSecretKeyDetector());
+  registerBuiltinDetector(createAwsAccessKeyDetector());
   registerBuiltinDetector(createGithubTokenDetector());
   registerBuiltinDetector(createSlackTokenDetector());
   registerBuiltinDetector(createGenericSecretDetector());
 
-  // Sort detectors by priority (highest first)
+  // Sort detectors by category priority (highest first)
   detectorRegistry.detectors.sort((a, b) => {
     const aPriority = getCategoryPriority(a.categories[0] ?? '');
     const bPriority = getCategoryPriority(b.categories[0] ?? '');
@@ -189,10 +193,18 @@ export function resolveOverlaps(
     return detections;
   }
 
-  // Sort by: category priority desc, confidence desc, length desc, registration order asc
+  // Sort by: start position asc, category priority desc, confidence desc, length desc
+  // Category priority is checked BEFORE confidence so that more-specific detectors
+  // (e.g., jwt vs bearer_token) win even with slightly lower confidence
   const sorted = [...detections].sort((a, b) => {
     if (a.range.start !== b.range.start) {
       return a.range.start - b.range.start;
+    }
+    // Category priority takes precedence over confidence for same start position
+    const priorityA = CATEGORY_PRIORITY[a.category] ?? 0;
+    const priorityB = CATEGORY_PRIORITY[b.category] ?? 0;
+    if (priorityB !== priorityA) {
+      return priorityB - priorityA;
     }
     if (b.confidence !== a.confidence) {
       return b.confidence - a.confidence;
@@ -202,10 +214,7 @@ export function resolveOverlaps(
     if (bLen !== aLen) {
       return bLen - aLen;
     }
-    // Use category priority as tiebreaker
-    const priorityA = CATEGORY_PRIORITY[a.category] ?? 0;
-    const priorityB = CATEGORY_PRIORITY[b.category] ?? 0;
-    return priorityB - priorityA;
+    return 0;
   });
 
   const resolved: DetectionResult[] = [];

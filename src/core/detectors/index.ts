@@ -34,6 +34,7 @@ export { createEmailDetector } from './email.js';
 export { createInternalUrlDetector } from './internalUrl.js';
 export { createIpAddressDetector } from './ipAddress.js';
 export { createAwsSecretKeyDetector } from './awsSecretKey.js';
+export { createAwsAccessKeyDetector } from './awsAccessKey.js';
 export { createGithubTokenDetector } from './githubToken.js';
 export { createSlackTokenDetector } from './slackToken.js';
 export { createGenericSecretDetector } from './genericSecret.js';
