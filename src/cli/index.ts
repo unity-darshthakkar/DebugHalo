@@ -8,10 +8,16 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+import { readFileSync } from 'fs';
 
-// Use require for package.json to avoid TypeScript import issues with JSON modules
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const pkg = require('../package.json');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load package.json for version
+const pkgPath = resolve(__dirname, '../../package.json');
+const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 
 const program = new Command();
 const version = pkg.version;
