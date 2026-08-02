@@ -35,11 +35,13 @@ program
     }
   });
 
+import { runScan, outputText, outputJson } from './commands/scan.js';
+
 program
   .command('scan')
   .description('Scan files for secrets and PII')
   .argument('[paths...]', 'Files or directories to scan', ['.'])
-  .option('-e, --ext <extensions...>', 'File extensions to scan', [
+  .option('-e, --ext <extensions...>', 'File extensions to scan (comma-separated)', [
     'ts',
     'tsx',
     'js',
@@ -49,22 +51,67 @@ program
     'yml',
     'env',
   ])
-  .option('-i, --ignore <patterns...>', 'Glob patterns to ignore', [
+  .option('-i, --ignore <patterns...>', 'Glob patterns to ignore (comma-separated)', [
     'node_modules/**',
     'dist/**',
     '.git/**',
   ])
-  .option('-o, --output <format>', 'Output format: json, text, sarif', 'text')
+  .option('-o, --output <format>', 'Output format: json, text', 'text')
   .option('--fail-on-findings', 'Exit with non-zero code if findings detected')
   .action(async (paths, options) => {
-    console.log(chalk.blue('DebugHalo CLI - Scan Command'));
-    console.log(chalk.dim('Paths:'), paths.join(', '));
-    console.log(chalk.dim('Extensions:'), options.ext.join(', '));
-    console.log(chalk.dim('Ignore patterns:'), options.ignore.join(', '));
-    console.log(chalk.dim('Output format:'), options.output);
-    console.log(chalk.dim('Fail on findings:'), options.failOnFindings);
-    console.log(chalk.yellow('\n⚠ Scan functionality not yet implemented (Phase 2)'));
-    console.log(chalk.dim('This is a placeholder CLI for Phase 1 scaffolding.'));
+    const verbose = program.opts()['verbose'] ?? false;
+
+    if (options.output === 'sarif') {
+      console.error(chalk.red('Error: SARIF output format is not implemented yet'));
+      process.exitCode = 2;
+      return;
+    }
+
+    if (options.output !== 'text' && options.output !== 'json') {
+      console.error(
+        chalk.red(`Error: Invalid output format: ${options.output}. Allowed: text, json`)
+      );
+      process.exitCode = 2;
+      return;
+    }
+
+    try {
+      const result = await runScan({
+        paths,
+        extensions: options.ext,
+        ignorePatterns: options.ignore,
+        outputFormat: options.output,
+        failOnFindings: options.failOnFindings ?? false,
+        verbose,
+        cwd: process.cwd(),
+      });
+
+      if (options.output === 'json') {
+        outputJson(result);
+      } else {
+        outputText(result, verbose);
+        // Also print per-file errors to stderr in text mode
+        if (result.errors.length > 0) {
+          for (const err of result.errors) {
+            console.error(chalk.yellow(`${err.file}: ${err.message}`));
+          }
+        }
+      }
+
+      if (options.failOnFindings && result.findings.length > 0) {
+        process.exitCode = 1;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Only print to stderr in text mode (json should have stdout only)
+      if (options.output !== 'json') {
+        console.error(chalk.red('Error:'), message);
+      } else {
+        // For json mode, write error object to stderr
+        console.error(JSON.stringify({ error: message }, null, 2));
+      }
+      process.exitCode = 2;
+    }
   });
 
 program
