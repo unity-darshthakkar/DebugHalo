@@ -12,6 +12,9 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { readFileSync } from 'fs';
 
+import { runScan, outputText, outputJson } from './commands/scan.js';
+import { runSanitize, outputText as outputSanitizeText } from './commands/sanitize.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -34,8 +37,6 @@ program
       console.log(chalk.dim('[DEBUG] Verbose mode enabled'));
     }
   });
-
-import { runScan, outputText, outputJson } from './commands/scan.js';
 
 program
   .command('scan')
@@ -135,13 +136,29 @@ program
   ])
   .option('--dry-run', 'Show what would be changed without writing')
   .action(async (paths, options) => {
-    console.log(chalk.blue('DebugHalo CLI - Sanitize Command'));
-    console.log(chalk.dim('Paths:'), paths.join(', '));
-    console.log(chalk.dim('Extensions:'), options.ext.join(', '));
-    console.log(chalk.dim('Ignore patterns:'), options.ignore.join(', '));
-    console.log(chalk.dim('Dry run:'), options.dryRun);
-    console.log(chalk.yellow('\n⚠ Sanitize functionality not yet implemented (Phase 2)'));
-    console.log(chalk.dim('This is a placeholder CLI for Phase 1 scaffolding.'));
+    const verbose = program.opts()['verbose'] ?? false;
+
+    try {
+      const result = await runSanitize({
+        paths,
+        extensions: options.ext,
+        ignorePatterns: options.ignore,
+        dryRun: options.dryRun ?? false,
+        verbose,
+        cwd: process.cwd(),
+      });
+
+      outputSanitizeText(result, options.dryRun ?? false, verbose);
+
+      // Exit codes: 0 = success, 1 = files changed, 2 = error
+      if (result.summary.filesChanged > 0) {
+        process.exitCode = 1;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(chalk.red('Error:'), message);
+      process.exitCode = 2;
+    }
   });
 
 program
