@@ -42,7 +42,7 @@ program
   .hook('preAction', (thisCommand) => {
     const opts = thisCommand.opts();
     if (opts['verbose']) {
-      console.log(chalk.dim('[DEBUG] Verbose mode enabled'));
+      console.error(chalk.dim('[DEBUG] Verbose mode enabled'));
     }
   });
 

@@ -215,4 +215,78 @@ describe('CLI Integration - Scan Command', { timeout: 30000 }, () => {
     expect(exitCode).toBe(2);
     expect(stderr).toContain('No valid input paths found');
   });
+
+  it('JSON output with --verbose keeps stdout clean', async () => {
+    writeFile(
+      testDir,
+      'secret.ts',
+      "const apiKey = 'sk-1234567890abcdef1234567890abcdef12345678';"
+    );
+
+    const { stdout, stderr, exitCode } = await runCli([
+      'scan',
+      testDir,
+      '--output',
+      'json',
+      '--verbose',
+    ]);
+
+    expect(exitCode).toBe(0);
+
+    // stdout must be valid JSON
+    const result = JSON.parse(stdout);
+    expect(result).toHaveProperty('summary');
+    expect(result).toHaveProperty('findings');
+    expect(result).toHaveProperty('errors');
+
+    // stdout must not contain debug/skip prefixes
+    expect(stdout).not.toContain('[DEBUG]');
+    expect(stdout).not.toContain('[SKIP]');
+
+    // neither stream must contain the raw secret
+    expect(stdout).not.toContain('1234567890abcdef');
+    expect(stderr).not.toContain('1234567890abcdef');
+
+    // stderr may contain diagnostics
+    expect(stderr).toContain('[DEBUG] Verbose mode enabled');
+  });
+
+  it('JSON output with --verbose and binary file keeps stdout clean', async () => {
+    writeFile(
+      testDir,
+      'secret.ts',
+      "const apiKey = 'sk-1234567890abcdef1234567890abcdef12345678';"
+    );
+    // Create a binary file with NUL byte
+    writeFile(testDir, 'binary.ts', "const binary\x00file = 'test';");
+
+    const { stdout, stderr, exitCode } = await runCli([
+      'scan',
+      testDir,
+      '--output',
+      'json',
+      '--verbose',
+    ]);
+
+    expect(exitCode).toBe(0);
+
+    // stdout must be valid JSON
+    const result = JSON.parse(stdout);
+    expect(result).toHaveProperty('summary');
+    expect(result).toHaveProperty('findings');
+    expect(result).toHaveProperty('errors');
+
+    // stdout must not contain debug/skip prefixes
+    expect(stdout).not.toContain('[DEBUG]');
+    expect(stdout).not.toContain('[SKIP]');
+
+    // neither stream must contain the raw secret
+    expect(stdout).not.toContain('1234567890abcdef');
+    expect(stderr).not.toContain('1234567890abcdef');
+
+    // stderr may contain diagnostics
+    expect(stderr).toContain('[DEBUG] Verbose mode enabled');
+    expect(stderr).toContain('[SKIP]');
+    expect(stderr).toContain('binary.ts: Binary file skipped');
+  });
 });
