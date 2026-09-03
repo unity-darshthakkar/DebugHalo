@@ -10,7 +10,7 @@ If you discover a security vulnerability in DebugHalo, please report it responsi
 
 **Do NOT** create a public issue for security vulnerabilities.
 
-Instead, please email the maintainer directly at: **security@debughalo.example.com**
+Instead, contact the repository owner privately through GitHub and ask for a secure channel. Do not include vulnerability details in a public issue.
 
 Include as much information as possible:
 
@@ -18,8 +18,6 @@ Include as much information as possible:
 - Steps to reproduce
 - Potential impact
 - Any proof-of-concept code or screenshots
-
-We will acknowledge receipt of your report within 48 hours and provide regular updates on our progress toward a resolution.
 
 ## 🛡️ Security Practices
 
@@ -73,6 +71,4 @@ We thank all security researchers who help keep DebugHalo safe and secure. Respo
 
 ## 📞 Contact
 
-For security-related inquiries, please contact: security@debughalo.example.com
-
-For general questions or non-security issues, use the [GitHub Issues](https://github.com/Darsh/DebugHalo/issues) page.
+For security-related inquiries, contact the repository owner privately through GitHub. For general questions or non-security issues, use the [GitHub Issues](https://github.com/unity-darshthakkar/DebugHalo/issues) page.

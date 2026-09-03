@@ -65,11 +65,9 @@
     "data-loss-prevention",
     "dlp",
     "secrets-management",
-    "pii-detection",
     "secrets-scanning",
     "pre-commit-hook",
     "git-hooks",
-    "ci-cd",
     "security",
     "privacy",
     "data-protection"
@@ -78,12 +76,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Darsh/DebugHalo.git"
+    "url": "https://github.com/unity-darshthakkar/DebugHalo.git"
   },
   "bugs": {
-    "url": "https://github.com/Darsh/DebugHalo/issues"
+    "url": "https://github.com/unity-darshthakkar/DebugHalo/issues"
   },
-  "homepage": "https://github.com/Darsh/DebugHalo#readme",
+  "homepage": "https://github.com/unity-darshthakkar/DebugHalo#readme",
   "publishConfig": {
     "access": "public",
     "provenance": true
