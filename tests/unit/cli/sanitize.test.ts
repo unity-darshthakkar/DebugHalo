@@ -4,7 +4,16 @@ import {
   normalizeExtensions,
   normalizeIgnorePatterns,
 } from '@/cli/commands/sanitize.js';
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  lstatSync,
+  readdirSync,
+  symlinkSync,
+} from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
@@ -248,6 +257,41 @@ describe('Sanitize Command', { timeout: 30000 }, () => {
   });
 
   describe('runSanitize - normal mode (modifies files)', () => {
+    it('rejects a symbolic link without changing it, its target, or creating a temp file', async ({
+      skip,
+    }) => {
+      const original = "const apiKey = 'sk-1234567890abcdef1234567890abcdef12345678';";
+      const targetPath = writeFile(testDir, 'target.ts', original);
+      const linkPath = join(testDir, 'link.ts');
+      try {
+        symlinkSync(targetPath, linkPath, 'file');
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === 'EPERM' || code === 'EACCES' || code === 'ENOTSUP') {
+          skip();
+          return;
+        }
+        throw err;
+      }
+
+      const result = await runSanitize({
+        paths: [linkPath],
+        extensions: ['ts'],
+        ignorePatterns: [],
+        dryRun: false,
+        verbose: false,
+      });
+
+      expect(result.summary.filesFailed).toBe(1);
+      expect(result.summary.filesProcessed).toBe(0);
+      expect(result.results[0]?.error).toBe('Refusing to sanitize symbolic link');
+      expect(lstatSync(linkPath).isSymbolicLink()).toBe(true);
+      expect(readFileSync(targetPath, 'utf8')).toBe(original);
+      expect(readdirSync(testDir).filter((name) => name.startsWith('.debughalo-atomic-'))).toEqual(
+        []
+      );
+    });
+
     it('sanitizes an explicit file with a detectable secret', async () => {
       const secretFile = writeFile(
         testDir,

@@ -8,7 +8,7 @@
 import { sanitizeText } from '../../core/pipeline.js';
 import { discoverFiles, FileDiscoveryError } from '../utils/fileDiscovery.js';
 import { readFileSafe } from '../utils/fileReading.js';
-import { writeFileSync } from 'fs';
+import { assertNotSymbolicLink, atomicWriteFile } from '../utils/atomicWrite.js';
 import { relative } from 'path';
 import chalk from 'chalk';
 
@@ -85,6 +85,17 @@ async function sanitizeFile(
 ): Promise<SanitizeFileResult> {
   const relativePath = relative(workingDir, filePath);
 
+  try {
+    assertNotSymbolicLink(filePath);
+  } catch (err) {
+    return {
+      file: relativePath,
+      changed: false,
+      findings: 0,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+
   // Read file (handles missing/binary/unreadable files)
   const { content, error } = readFileSafe(filePath);
   if (error) {
@@ -103,8 +114,7 @@ async function sanitizeFile(
     const findings = result.detections.length;
 
     if (changed && !dryRun) {
-      // Write sanitized content back to file
-      writeFileSync(filePath, result.sanitizedText, 'utf-8');
+      atomicWriteFile(filePath, result.sanitizedText);
     }
 
     return {
