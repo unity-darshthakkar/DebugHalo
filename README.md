@@ -1,21 +1,31 @@
 # DebugHalo
 
-**DebugHalo** is a pre-deployment PII/secret detox pipeline. It scans files for secrets and personally identifiable information (PII), and can sanitize them by replacing detected values with safe placeholders — all locally, with no data sent to external servers.
+**DebugHalo** is a pre-deployment PII/secret detox pipeline. It scans files for secrets and personally identifiable information (PII), and can sanitize them by replacing detected values with safe placeholders. DebugHalo performs this processing locally and has no runtime telemetry or network integration.
 
 ## 🔒 Local-First & Privacy-Focused
 
 - All processing happens locally on your machine
-- No data is ever sent to external servers or APIs
+- The scanner and sanitizer do not send file contents to external servers or APIs
 - Sensitive information (PII, secrets, passwords) is automatically detected and can be masked/sanitized
 - Designed for secure debugging and preprocessing in sensitive environments
 
 ## 📦 Installation
 
+DebugHalo requires Node.js 20 or newer. Install the package globally to use the
+`debug-halo` command:
+
+```bash
+npm install --global debug-halo
+debug-halo --version
+```
+
+To build the current source checkout instead:
+
 ```bash
 # Clone and build locally
-git clone https://github.com/yourusername/debug-halo.git
-cd debug-halo
-npm install
+git clone https://github.com/unity-darshthakkar/DebugHalo.git
+cd DebugHalo
+npm ci
 npm run build
 
 # Run directly
@@ -27,14 +37,14 @@ node dist/cli/index.js scan .
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/yourusername/debug-halo.git
-   cd debug-halo
+   git clone https://github.com/unity-darshthakkar/DebugHalo.git
+   cd DebugHalo
    ```
 
 2. Install dependencies:
 
    ```bash
-   npm install
+   npm ci
    ```
 
 3. Build the CLI:
@@ -73,6 +83,19 @@ debug-halo sanitize .
 
 > **Note**: The examples above assume the CLI is in your PATH or you're using `node dist/cli/index.js` from the built project.
 
+## Package API
+
+DebugHalo is an ECMAScript module. Import the public core API from the package root:
+
+```js
+import { detectOnly, quickSanitize } from 'debug-halo';
+
+const findings = await detectOnly('Contact user@example.com');
+const sanitized = await quickSanitize('Contact user@example.com');
+```
+
+TypeScript declarations are included. CommonJS `require()` is not a supported entry point.
+
 ## 📖 Commands
 
 ### `debug-halo scan`
@@ -98,7 +121,7 @@ debug-halo scan [paths...] [options]
 
 - `0` — Success, no findings (or findings found but `--fail-on-findings` not set)
 - `1` — Findings detected and `--fail-on-findings` enabled
-- `2` — Config error, invalid arguments, or scan failure
+- `2` — Usage, config, discovery, processing, or internal failure
 
 **Examples:**
 
@@ -144,7 +167,7 @@ debug-halo sanitize [paths...] [options]
 
 - `0` — Success, no files changed
 - `1` — Files were modified (or would be modified in dry-run)
-- `2` — Config error, invalid arguments, or sanitization failure
+- `2` — Usage, config, discovery, processing, or internal failure
 
 **Examples:**
 
@@ -200,7 +223,8 @@ DebugHalo uses a `.debughalo.json` file in your project root (or a custom path v
   "extensions": ["ts", "tsx", "js", "jsx", "json", "yaml", "yml", "env"],
   "ignorePatterns": ["node_modules/**", "dist/**", ".git/**"],
   "outputFormat": "text",
-  "failOnFindings": false
+  "failOnFindings": false,
+  "dryRun": false
 }
 ```
 
@@ -212,8 +236,9 @@ DebugHalo uses a `.debughalo.json` file in your project root (or a custom path v
 | `ignorePatterns` | `string[]`         | `["node_modules/**","dist/**",".git/**"]`           | Glob patterns to ignore               |
 | `outputFormat`   | `"text" \| "json"` | `"text"`                                            | Default output format for `scan`      |
 | `failOnFindings` | `boolean`          | `false`                                             | Default for `scan --fail-on-findings` |
+| `dryRun`         | `boolean`          | `false`                                             | Default dry-run mode for `sanitize`   |
 
-> **Note**: `--dry-run` is a `sanitize`-only CLI flag and is not stored in the config file.
+> **Note**: `debug-halo init` omits `dryRun` from the generated file, so sanitization writes by default. You can add `"dryRun": true` to configuration or pass `--dry-run` on the command line.
 
 ### Config Precedence
 
@@ -233,7 +258,8 @@ Options are resolved in this order (highest priority last):
   "extensions": ["ts", "js", "json"],
   "ignorePatterns": ["**/*.min.js", "**/vendor/**", "coverage/**"],
   "outputFormat": "json",
-  "failOnFindings": true
+  "failOnFindings": true,
+  "dryRun": true
 }
 ```
 
@@ -279,19 +305,26 @@ DebugHalo detects various secret types and PII categories:
 
 - **No raw secrets in output**: Both text and JSON output redact secret values (showing only previews like `sk***78`)
 - **Binary file skipping**: Files containing NUL bytes are automatically skipped
+- **Bounded text input**: UTF-8 text is supported up to the core 10 MiB input limit; oversized inputs fail without an unbounded whole-file read
 - **`.gitignore` respected**: Patterns from local `.gitignore` are automatically applied
 - **Default exclusions**: `.git/**`, `node_modules/**`, `dist/**`, `coverage/**` are always ignored
-- **Dry-run mode**: Preview sanitization changes before applying
+- **Dry-run mode**: Preview sanitization changes without writing files
+- **Safer replacement**: Sanitized content is written to a temporary file in the same directory and atomically replaces the regular target; no persistent backup copy is created
+- **Symlink refusal**: Sanitize refuses symbolic-link targets instead of replacing them or writing through them
+
+These safeguards reduce common write and input-handling risks, but they do not guarantee recovery from every operating-system, hardware, or filesystem failure. Use version control or another backup strategy before sanitizing important files.
 
 ## 📊 Exit Codes
 
 All commands follow consistent exit codes:
 
-| Code | Meaning                                                                     |
-| ---- | --------------------------------------------------------------------------- |
-| `0`  | Success (no findings, or no files changed)                                  |
-| `1`  | Findings detected (`scan --fail-on-findings`) or files changed (`sanitize`) |
-| `2`  | Error: invalid config, missing file, bad arguments, or processing failure   |
+| Code | Meaning                                                                                                             |
+| ---- | ------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Successful execution                                                                                                |
+| `1`  | Intentional domain result: scan findings with `--fail-on-findings`, or files changed/would change during `sanitize` |
+| `2`  | Usage, config, discovery, processing, or internal failure                                                           |
+
+Any per-file processing failure produces exit code `2`, even when other files were processed successfully. Binary files are skipped rather than treated as processing failures.
 
 ## 🧪 CI/CD Integration
 
@@ -306,13 +339,18 @@ Use `--output json` for machine-parsable results and `--fail-on-findings` to fai
 ## 🚫 Current Limitations
 
 - **No SARIF output** — JSON and text only
-- **No restoration/backup** — Sanitize modifies files in-place; use version control
+- **No persistent backup** — Sanitize atomically replaces files but does not retain backup copies; use version control
 - **No vault persistence** — Sanitization mappings are not stored across runs
+- **UTF-8 text only** — Arbitrary text encodings are not supported
 - **No YAML config** — Only `.debughalo.json` supported
 - **No Chrome extension** — CLI only
 - **No AI integrations** — Standalone detector/sanitizer
 - **Limited detector set** — Covers common secret types; not exhaustive
 - **No incremental scanning** — Full scan each run
+
+## Supported Platforms
+
+The package supports Node.js 20 or newer on 64-bit and ARM64 Windows, macOS, and Linux. Cross-platform filesystem and CLI behavior is covered by the test suite; exact filesystem guarantees still depend on the host operating system and filesystem.
 
 ## 📚 Documentation
 

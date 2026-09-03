@@ -90,6 +90,20 @@ describe('File Discovery', { timeout: 10000 }, () => {
     expect(result).toContain(resolve(testDir, 'app.ts'));
   });
 
+  it('loads .gitignore from a target directory that is not cwd', async () => {
+    const targetDir = join(testDir, 'target');
+    writeFile(targetDir, 'app.ts', 'app');
+    writeFile(targetDir, 'secret.key', 'secret');
+    writeFile(targetDir, '.gitignore', '*.key');
+
+    const result = await discoverFiles([targetDir], {
+      cwd: testDir,
+      respectGitignore: true,
+    });
+
+    expect(result).toEqual([resolve(targetDir, 'app.ts')]);
+  });
+
   it('respects CLI ignore patterns', async () => {
     writeFile(testDir, 'app.ts', 'app');
     writeFile(testDir, 'secret.key', 'secret');

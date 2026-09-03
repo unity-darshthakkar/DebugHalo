@@ -21,6 +21,13 @@ import { createAliasVault } from './aliasVault.js';
 import { normalizeLineEndings, createDetectionConfig } from './detectors.js';
 
 /**
+ * Default maximum input size for pipeline operations (10 MB).
+ * Used by both core pipeline validation and CLI file reading to enforce
+ * the same decoded-text length limit.
+ */
+export const MAX_INPUT_SIZE = 10 * 1024 * 1024;
+
+/**
  * Main pipeline entry point
  */
 export async function createDebugBundle(input: DebugBundleInput): Promise<DebugBundleOutput> {
@@ -132,7 +139,7 @@ function validateInput(text: string, config?: PipelineConfig): void {
     throw new Error('Input must be a non-empty string');
   }
 
-  const maxSize = config?.maxInputSize ?? 10 * 1024 * 1024; // 10MB default
+  const maxSize = config?.maxInputSize ?? MAX_INPUT_SIZE;
   if (text.length > maxSize) {
     throw new Error(`Input exceeds maximum size of ${maxSize} bytes`);
   }

@@ -117,6 +117,7 @@ export {
   detectOnly,
   getDetectionStats,
   quickScan,
+  MAX_INPUT_SIZE,
 } from './pipeline.js';
 
 // Core version

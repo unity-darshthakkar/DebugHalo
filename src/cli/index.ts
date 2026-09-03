@@ -6,7 +6,7 @@
  * Strip secrets before they ship
  */
 
-import { Command } from 'commander';
+import { Command, CommanderError } from 'commander';
 import chalk from 'chalk';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
@@ -21,6 +21,7 @@ import {
   type ConfigLoadResult,
 } from './configLoader.js';
 import { createDefaultConfigFile } from './config.js';
+import { sanitizeExitCode, scanExitCode } from './exitCodes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -31,6 +32,8 @@ const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
 
 const program = new Command();
 const version = pkg.version;
+
+program.exitOverride();
 
 // Global options - config must be loaded before commands run
 program
@@ -46,19 +49,35 @@ program
     }
   });
 
-// Helper: load config and handle errors
-function loadConfigOrExit(explicitConfigPath: string | undefined, cwd: string): ConfigLoadResult {
+function loadConfigForCommand(
+  explicitConfigPath: string | undefined,
+  cwd: string
+): ConfigLoadResult | undefined {
   try {
     return loadConfig(explicitConfigPath, cwd);
   } catch (err) {
-    if (err instanceof ConfigLoadError) {
-      console.error(chalk.red('Error:'), err.message);
-      process.exitCode = err.exitCode;
-      throw err; // Re-throw to stop execution
-    }
-    console.error(chalk.red('Error:'), err instanceof Error ? err.message : String(err));
-    process.exitCode = 2;
-    throw err;
+    reportFatalError(err);
+    return undefined;
+  }
+}
+
+function reportFatalError(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(chalk.red('Error:'), message);
+  process.exitCode = error instanceof ConfigLoadError ? error.exitCode : 2;
+}
+
+function reportFileErrors(
+  errors: ReadonlyArray<{ file: string; message: string }>,
+  verbose: boolean
+): void {
+  for (const error of errors) {
+    const prefix = verbose
+      ? error.message === 'Binary file skipped'
+        ? '[SKIP] '
+        : '[ERROR] '
+      : '';
+    console.error(chalk.yellow(`${prefix}${error.file}: ${error.message}`));
   }
 }
 
@@ -160,12 +179,8 @@ program
     const cwd = process.cwd();
 
     // Load config
-    let configResult: ConfigLoadResult;
-    try {
-      configResult = loadConfigOrExit(globalOpts['config'], cwd);
-    } catch {
-      return; // exitCode already set
-    }
+    const configResult = loadConfigForCommand(globalOpts['config'], cwd);
+    if (!configResult) return;
 
     // Get explicitly provided CLI options
     const explicitCliOpts = getExplicitCliOptions(scanCommand);
@@ -204,17 +219,14 @@ program
         outputJson(result);
       } else {
         outputText(result, verbose);
-        // Also print per-file errors to stderr in text mode
-        if (result.errors.length > 0) {
-          for (const err of result.errors) {
-            console.error(chalk.yellow(`${err.file}: ${err.message}`));
-          }
-        }
       }
+      reportFileErrors(result.errors, verbose);
 
-      if (mergedConfig.failOnFindings && result.findings.length > 0) {
-        process.exitCode = 1;
-      }
+      process.exitCode = scanExitCode(
+        result.summary.filesFailed,
+        mergedConfig.failOnFindings,
+        result.findings.length
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // Only print to stderr in text mode (json should have stdout only)
@@ -241,12 +253,8 @@ program
     const cwd = process.cwd();
 
     // Load config
-    let configResult: ConfigLoadResult;
-    try {
-      configResult = loadConfigOrExit(globalOpts['config'], cwd);
-    } catch {
-      return; // exitCode already set
-    }
+    const configResult = loadConfigForCommand(globalOpts['config'], cwd);
+    if (!configResult) return;
 
     // Get explicitly provided CLI options
     const explicitCliOpts = getExplicitSanitizeOptions(sanitizeCommand);
@@ -271,11 +279,15 @@ program
       });
 
       outputSanitizeText(result, mergedConfig.dryRun, verbose);
+      reportFileErrors(
+        result.results.flatMap((fileResult) =>
+          fileResult.error ? [{ file: fileResult.file, message: fileResult.error }] : []
+        ),
+        verbose
+      );
 
       // Exit codes: 0 = success, 1 = files changed, 2 = error
-      if (result.summary.filesChanged > 0) {
-        process.exitCode = 1;
-      }
+      process.exitCode = sanitizeExitCode(result.summary.filesFailed, result.summary.filesChanged);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(chalk.red('Error:'), message);
@@ -319,8 +331,11 @@ program
   });
 
 program.parseAsync(process.argv).catch((error) => {
-  console.error(chalk.red('Error:'), error.message);
-  process.exit(1);
+  if (error instanceof CommanderError) {
+    process.exitCode = error.exitCode === 0 ? 0 : 2;
+    return;
+  }
+  reportFatalError(error);
 });
 
 export { program };

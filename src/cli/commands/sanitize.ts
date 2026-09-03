@@ -7,7 +7,8 @@
 
 import { sanitizeText } from '../../core/pipeline.js';
 import { discoverFiles, FileDiscoveryError } from '../utils/fileDiscovery.js';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSafe } from '../utils/fileReading.js';
+import { assertNotSymbolicLink, atomicWriteFile } from '../utils/atomicWrite.js';
 import { relative } from 'path';
 import chalk from 'chalk';
 
@@ -75,33 +76,6 @@ export function normalizeIgnorePatterns(input: string[]): string[] {
 }
 
 /**
- * Check if file appears to be binary (contains NUL byte)
- */
-function isBinaryFile(filePath: string): boolean {
-  try {
-    const chunk = readFileSync(filePath, { encoding: 'utf-8', flag: 'r' });
-    return chunk.includes('\0');
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Read file content as UTF-8
- */
-function readFileSafe(filePath: string): { content: string; error?: string } {
-  try {
-    if (isBinaryFile(filePath)) {
-      return { content: '', error: 'Binary file skipped' };
-    }
-    const content = readFileSync(filePath, 'utf-8');
-    return { content };
-  } catch (err) {
-    return { content: '', error: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-/**
  * Sanitize a single file
  */
 async function sanitizeFile(
@@ -111,7 +85,18 @@ async function sanitizeFile(
 ): Promise<SanitizeFileResult> {
   const relativePath = relative(workingDir, filePath);
 
-  // Read file
+  try {
+    assertNotSymbolicLink(filePath);
+  } catch (err) {
+    return {
+      file: relativePath,
+      changed: false,
+      findings: 0,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  // Read file (handles missing/binary/unreadable files)
   const { content, error } = readFileSafe(filePath);
   if (error) {
     return {
@@ -129,8 +114,7 @@ async function sanitizeFile(
     const findings = result.detections.length;
 
     if (changed && !dryRun) {
-      // Write sanitized content back to file
-      writeFileSync(filePath, result.sanitizedText, 'utf-8');
+      atomicWriteFile(filePath, result.sanitizedText);
     }
 
     return {
@@ -154,7 +138,7 @@ async function sanitizeFile(
  * Throws Error for discovery failures
  */
 export async function runSanitize(options: SanitizeOptions): Promise<SanitizeResult> {
-  const { paths, extensions, ignorePatterns, dryRun, verbose, cwd } = options;
+  const { paths, extensions, ignorePatterns, dryRun, cwd } = options;
   const workingDir = cwd ?? process.cwd();
 
   const normalizedExtensions = normalizeExtensions(extensions);
@@ -189,22 +173,6 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
   const results: SanitizeFileResult[] = [];
 
   for (const filePath of discoveredFiles) {
-    // Check if file is readable
-    if (!existsSync(filePath)) {
-      const relativePath = relative(workingDir, filePath);
-      results.push({
-        file: relativePath,
-        changed: false,
-        findings: 0,
-        error: 'File not found',
-      });
-      summary.filesFailed++;
-      if (verbose) {
-        console.error(chalk.yellow(`[SKIP] ${relativePath}: File not found`));
-      }
-      continue;
-    }
-
     const fileResult = await sanitizeFile(filePath, workingDir, dryRun);
 
     if (fileResult.error) {
@@ -212,9 +180,6 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
         summary.filesSkipped++;
       } else {
         summary.filesFailed++;
-      }
-      if (verbose) {
-        console.error(chalk.yellow(`[SKIP] ${fileResult.file}: ${fileResult.error}`));
       }
     } else {
       summary.filesProcessed++;
@@ -237,6 +202,7 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
  */
 export function outputText(result: SanitizeResult, dryRun: boolean, verbose: boolean): void {
   const { summary, results } = result;
+  void verbose;
 
   console.log(chalk.blue('DebugHalo Sanitize Results'));
   console.log('');
@@ -278,14 +244,4 @@ export function outputText(result: SanitizeResult, dryRun: boolean, verbose: boo
 
   console.log('');
   console.log(chalk.dim(`Total findings: ${summary.totalFindings}`));
-
-  if (verbose && results.some((r) => r.error)) {
-    console.log('');
-    console.log(chalk.yellow('Errors:'));
-    for (const r of results) {
-      if (r.error) {
-        console.log(chalk.yellow(`  ${r.file}: ${r.error}`));
-      }
-    }
-  }
 }

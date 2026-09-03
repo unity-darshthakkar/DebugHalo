@@ -6,8 +6,8 @@
 
 import { detectOnly } from '../../core/pipeline.js';
 import { discoverFiles, FileDiscoveryError } from '../utils/fileDiscovery.js';
+import { readFileSafe } from '../utils/fileReading.js';
 import { relative } from 'path';
-import { readFileSync, existsSync } from 'fs';
 import chalk from 'chalk';
 
 export interface ScanFinding {
@@ -120,38 +120,11 @@ function toScanFinding(
 }
 
 /**
- * Check if file appears to be binary (contains NUL byte)
- */
-function isBinaryFile(filePath: string): boolean {
-  try {
-    const chunk = readFileSync(filePath, { encoding: 'utf-8', flag: 'r' });
-    return chunk.includes('\0');
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Read file content as UTF-8
- */
-function readFileSafe(filePath: string): { content: string; error?: string } {
-  try {
-    if (isBinaryFile(filePath)) {
-      return { content: '', error: 'Binary file skipped' };
-    }
-    const content = readFileSync(filePath, 'utf-8');
-    return { content };
-  } catch (err) {
-    return { content: '', error: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-/**
  * Run the scan with the given options
  * Throws Error for discovery failures and file read errors that prevent meaningful scan
  */
 export async function runScan(options: ScanOptions): Promise<ScanResult> {
-  const { paths, extensions, ignorePatterns, verbose, cwd } = options;
+  const { paths, extensions, ignorePatterns, cwd } = options;
   const workingDir = cwd ?? process.cwd();
 
   // Validate output format
@@ -187,17 +160,7 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
   let filesFailed = 0;
 
   for (const filePath of discoveredFiles) {
-    // Check if file is readable
-    if (!existsSync(filePath)) {
-      errors.push({ file: relative(workingDir, filePath), message: 'File not found' });
-      filesFailed++;
-      if (verbose) {
-        console.error(chalk.yellow(`[SKIP] ${relative(workingDir, filePath)}: File not found`));
-      }
-      continue;
-    }
-
-    // Read file
+    // Read file (handles missing/binary/unreadable files)
     const { content, error } = readFileSafe(filePath);
     if (error) {
       errors.push({ file: relative(workingDir, filePath), message: error });
@@ -205,9 +168,6 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
         filesSkipped++;
       } else {
         filesFailed++;
-      }
-      if (verbose) {
-        console.error(chalk.yellow(`[SKIP] ${relative(workingDir, filePath)}: ${error}`));
       }
       continue;
     }
@@ -227,13 +187,6 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
         message: err instanceof Error ? err.message : String(err),
       });
       filesFailed++;
-      if (verbose) {
-        console.error(
-          chalk.red(
-            `[ERROR] ${relative(workingDir, filePath)}: ${err instanceof Error ? err.message : String(err)}`
-          )
-        );
-      }
     }
   }
 
@@ -265,7 +218,8 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
  * Output scan results in text format
  */
 export function outputText(result: ScanResult, verbose: boolean): void {
-  const { summary, findings, errors } = result;
+  const { summary, findings } = result;
+  void verbose;
 
   console.log(chalk.blue('DebugHalo Scan Results'));
   console.log('');
@@ -298,13 +252,6 @@ export function outputText(result: ScanResult, verbose: boolean): void {
   }
 
   console.log('');
-
-  if (errors.length > 0 && verbose) {
-    console.log(chalk.yellow('Errors:'));
-    for (const err of errors) {
-      console.log(chalk.yellow(`  ${err.file}: ${err.message}`));
-    }
-  }
 }
 
 /**
