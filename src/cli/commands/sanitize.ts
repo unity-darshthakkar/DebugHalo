@@ -7,7 +7,8 @@
 
 import { sanitizeText } from '../../core/pipeline.js';
 import { discoverFiles, FileDiscoveryError } from '../utils/fileDiscovery.js';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSafe } from '../utils/fileReading.js';
+import { writeFileSync } from 'fs';
 import { relative } from 'path';
 import chalk from 'chalk';
 
@@ -75,33 +76,6 @@ export function normalizeIgnorePatterns(input: string[]): string[] {
 }
 
 /**
- * Check if file appears to be binary (contains NUL byte)
- */
-function isBinaryFile(filePath: string): boolean {
-  try {
-    const chunk = readFileSync(filePath, { encoding: 'utf-8', flag: 'r' });
-    return chunk.includes('\0');
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Read file content as UTF-8
- */
-function readFileSafe(filePath: string): { content: string; error?: string } {
-  try {
-    if (isBinaryFile(filePath)) {
-      return { content: '', error: 'Binary file skipped' };
-    }
-    const content = readFileSync(filePath, 'utf-8');
-    return { content };
-  } catch (err) {
-    return { content: '', error: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-/**
  * Sanitize a single file
  */
 async function sanitizeFile(
@@ -111,7 +85,7 @@ async function sanitizeFile(
 ): Promise<SanitizeFileResult> {
   const relativePath = relative(workingDir, filePath);
 
-  // Read file
+  // Read file (handles missing/binary/unreadable files)
   const { content, error } = readFileSafe(filePath);
   if (error) {
     return {
@@ -189,22 +163,6 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
   const results: SanitizeFileResult[] = [];
 
   for (const filePath of discoveredFiles) {
-    // Check if file is readable
-    if (!existsSync(filePath)) {
-      const relativePath = relative(workingDir, filePath);
-      results.push({
-        file: relativePath,
-        changed: false,
-        findings: 0,
-        error: 'File not found',
-      });
-      summary.filesFailed++;
-      if (verbose) {
-        console.error(chalk.yellow(`[SKIP] ${relativePath}: File not found`));
-      }
-      continue;
-    }
-
     const fileResult = await sanitizeFile(filePath, workingDir, dryRun);
 
     if (fileResult.error) {

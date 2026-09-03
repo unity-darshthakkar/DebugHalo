@@ -6,8 +6,8 @@
 
 import { detectOnly } from '../../core/pipeline.js';
 import { discoverFiles, FileDiscoveryError } from '../utils/fileDiscovery.js';
+import { readFileSafe } from '../utils/fileReading.js';
 import { relative } from 'path';
-import { readFileSync, existsSync } from 'fs';
 import chalk from 'chalk';
 
 export interface ScanFinding {
@@ -119,32 +119,6 @@ function toScanFinding(
   };
 }
 
-/**
- * Check if file appears to be binary (contains NUL byte)
- */
-function isBinaryFile(filePath: string): boolean {
-  try {
-    const chunk = readFileSync(filePath, { encoding: 'utf-8', flag: 'r' });
-    return chunk.includes('\0');
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Read file content as UTF-8
- */
-function readFileSafe(filePath: string): { content: string; error?: string } {
-  try {
-    if (isBinaryFile(filePath)) {
-      return { content: '', error: 'Binary file skipped' };
-    }
-    const content = readFileSync(filePath, 'utf-8');
-    return { content };
-  } catch (err) {
-    return { content: '', error: err instanceof Error ? err.message : String(err) };
-  }
-}
 
 /**
  * Run the scan with the given options
@@ -187,17 +161,7 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
   let filesFailed = 0;
 
   for (const filePath of discoveredFiles) {
-    // Check if file is readable
-    if (!existsSync(filePath)) {
-      errors.push({ file: relative(workingDir, filePath), message: 'File not found' });
-      filesFailed++;
-      if (verbose) {
-        console.error(chalk.yellow(`[SKIP] ${relative(workingDir, filePath)}: File not found`));
-      }
-      continue;
-    }
-
-    // Read file
+    // Read file (handles missing/binary/unreadable files)
     const { content, error } = readFileSafe(filePath);
     if (error) {
       errors.push({ file: relative(workingDir, filePath), message: error });
