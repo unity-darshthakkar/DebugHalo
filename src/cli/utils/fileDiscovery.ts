@@ -134,13 +134,9 @@ export async function discoverFiles(
 
     if (c.kind === 'directory') {
       const directoryPath = c.path;
-      const directoryRelativeToCwd = toRelativePath(cwd, directoryPath);
-      const directoryIsInsideCwd = isInsideRoot(directoryRelativeToCwd);
-
-      const applicableGitignorePath =
-        respectGitignore && directoryIsInsideCwd && gitignorePath && existsSync(gitignorePath)
-          ? gitignorePath
-          : undefined;
+      const applicableGitignorePath = respectGitignore
+        ? resolve(directoryPath, '.gitignore')
+        : undefined;
 
       const directoryIgnore = buildIgnore(ignorePatterns, applicableGitignorePath);
 

@@ -251,7 +251,10 @@ describe('CLI Integration - Sanitize Command', { timeout: 30000 }, () => {
     writeFile(testDir, 'config.secret', "api_key = 'sk-1234567890abcdef';");
     writeFile(testDir, 'app.ts', "const normal = 'value';");
 
-    const { stdout, exitCode } = await runCli(['sanitize', testDir, '--ext', 'ts,secret'], testDir);
+    const { stdout, exitCode } = await runCli(
+      ['sanitize', testDir, '--ext', 'ts,secret', '--dry-run'],
+      testDir
+    );
 
     expect(exitCode).toBe(0); // No changes since app.ts has no secrets
     expect(stdout).toContain('No files would be changed');
