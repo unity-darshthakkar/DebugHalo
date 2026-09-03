@@ -18,7 +18,7 @@
     }
   },
   "bin": {
-    "debug-halo": "./dist/cli/index.js"
+    "debug-halo": "dist/cli/index.js"
   },
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
@@ -76,7 +76,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/unity-darshthakkar/DebugHalo.git"
+    "url": "git+https://github.com/unity-darshthakkar/DebugHalo.git"
   },
   "bugs": {
     "url": "https://github.com/unity-darshthakkar/DebugHalo/issues"
