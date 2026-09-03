@@ -14,6 +14,7 @@ vi.mock('@/cli/utils/atomicWrite.js', async (importOriginal) => {
 });
 
 import { runSanitize } from '@/cli/commands/sanitize.js';
+import { sanitizeExitCode } from '@/cli/exitCodes.js';
 
 describe('sanitize write safety', () => {
   let testDir: string;
@@ -61,6 +62,7 @@ describe('sanitize write safety', () => {
     expect(result.summary.filesFailed).toBe(1);
     expect(result.summary.filesProcessed).toBe(0);
     expect(result.summary.filesChanged).toBe(0);
+    expect(sanitizeExitCode(result.summary.filesFailed, result.summary.filesChanged)).toBe(2);
     expect(result.results[0]?.error).toBe('simulated atomic replacement failure');
     expect(result.results[0]?.error).not.toContain('1234567890abcdef');
     expect(readFileSync(filePath, 'utf8')).toBe(original);

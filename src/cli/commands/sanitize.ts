@@ -138,7 +138,7 @@ async function sanitizeFile(
  * Throws Error for discovery failures
  */
 export async function runSanitize(options: SanitizeOptions): Promise<SanitizeResult> {
-  const { paths, extensions, ignorePatterns, dryRun, verbose, cwd } = options;
+  const { paths, extensions, ignorePatterns, dryRun, cwd } = options;
   const workingDir = cwd ?? process.cwd();
 
   const normalizedExtensions = normalizeExtensions(extensions);
@@ -181,9 +181,6 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
       } else {
         summary.filesFailed++;
       }
-      if (verbose) {
-        console.error(chalk.yellow(`[SKIP] ${fileResult.file}: ${fileResult.error}`));
-      }
     } else {
       summary.filesProcessed++;
       summary.totalFindings += fileResult.findings;
@@ -205,6 +202,7 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
  */
 export function outputText(result: SanitizeResult, dryRun: boolean, verbose: boolean): void {
   const { summary, results } = result;
+  void verbose;
 
   console.log(chalk.blue('DebugHalo Sanitize Results'));
   console.log('');
@@ -246,14 +244,4 @@ export function outputText(result: SanitizeResult, dryRun: boolean, verbose: boo
 
   console.log('');
   console.log(chalk.dim(`Total findings: ${summary.totalFindings}`));
-
-  if (verbose && results.some((r) => r.error)) {
-    console.log('');
-    console.log(chalk.yellow('Errors:'));
-    for (const r of results) {
-      if (r.error) {
-        console.log(chalk.yellow(`  ${r.file}: ${r.error}`));
-      }
-    }
-  }
 }

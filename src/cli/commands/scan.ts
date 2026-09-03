@@ -119,13 +119,12 @@ function toScanFinding(
   };
 }
 
-
 /**
  * Run the scan with the given options
  * Throws Error for discovery failures and file read errors that prevent meaningful scan
  */
 export async function runScan(options: ScanOptions): Promise<ScanResult> {
-  const { paths, extensions, ignorePatterns, verbose, cwd } = options;
+  const { paths, extensions, ignorePatterns, cwd } = options;
   const workingDir = cwd ?? process.cwd();
 
   // Validate output format
@@ -170,9 +169,6 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
       } else {
         filesFailed++;
       }
-      if (verbose) {
-        console.error(chalk.yellow(`[SKIP] ${relative(workingDir, filePath)}: ${error}`));
-      }
       continue;
     }
 
@@ -191,13 +187,6 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
         message: err instanceof Error ? err.message : String(err),
       });
       filesFailed++;
-      if (verbose) {
-        console.error(
-          chalk.red(
-            `[ERROR] ${relative(workingDir, filePath)}: ${err instanceof Error ? err.message : String(err)}`
-          )
-        );
-      }
     }
   }
 
@@ -229,7 +218,8 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
  * Output scan results in text format
  */
 export function outputText(result: ScanResult, verbose: boolean): void {
-  const { summary, findings, errors } = result;
+  const { summary, findings } = result;
+  void verbose;
 
   console.log(chalk.blue('DebugHalo Scan Results'));
   console.log('');
@@ -262,13 +252,6 @@ export function outputText(result: ScanResult, verbose: boolean): void {
   }
 
   console.log('');
-
-  if (errors.length > 0 && verbose) {
-    console.log(chalk.yellow('Errors:'));
-    for (const err of errors) {
-      console.log(chalk.yellow(`  ${err.file}: ${err.message}`));
-    }
-  }
 }
 
 /**
