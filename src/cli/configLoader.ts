@@ -148,6 +148,8 @@ export function applyCliOptions(
     outputFormat?: 'text' | 'json';
     failOnFindings?: boolean;
     dryRun?: boolean;
+    minConfidence?: number;
+    disabledCategories?: string[];
   }
 ): Required<DebugHaloConfig> {
   return {
@@ -156,5 +158,7 @@ export function applyCliOptions(
     outputFormat: cliOptions.outputFormat ?? config.outputFormat,
     failOnFindings: cliOptions.failOnFindings ?? config.failOnFindings,
     dryRun: cliOptions.dryRun ?? config.dryRun,
+    minConfidence: cliOptions.minConfidence ?? config.minConfidence,
+    disabledCategories: cliOptions.disabledCategories ?? config.disabledCategories,
   };
 }

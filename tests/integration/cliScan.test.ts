@@ -57,6 +57,20 @@ function runCli(args: string[]): Promise<CliResult> {
 }
 
 describe('CLI Integration - Scan Command', { timeout: 30000 }, () => {
+  it('reports structured service-credential quality fields in JSON', async () => {
+    writeFile(testDir, 'google.ts', `const key = 'AIza${'Ab3_'.repeat(8)}Ab3';`);
+    const { stdout, exitCode } = await runCli(['scan', testDir, '--output', 'json']);
+    const output = JSON.parse(stdout);
+    expect(exitCode).toBe(0);
+    expect(output.findings[0]).toMatchObject({
+      category: 'google_api_key',
+      severity: 'high',
+      detector: 'service-credential-detector',
+      likelyTestValue: false,
+    });
+    expect(output.findings[0].reason).toContain('Google API key');
+  });
+
   let testDir: string;
 
   beforeEach(async () => {

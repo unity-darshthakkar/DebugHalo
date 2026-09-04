@@ -224,19 +224,23 @@ DebugHalo uses a `.debughalo.json` file in your project root (or a custom path v
   "ignorePatterns": ["node_modules/**", "dist/**", ".git/**"],
   "outputFormat": "text",
   "failOnFindings": false,
-  "dryRun": false
+  "dryRun": false,
+  "minConfidence": 0.5,
+  "disabledCategories": []
 }
 ```
 
 ### Config Fields
 
-| Field            | Type               | Default                                             | Description                           |
-| ---------------- | ------------------ | --------------------------------------------------- | ------------------------------------- |
-| `extensions`     | `string[]`         | `["ts","tsx","js","jsx","json","yaml","yml","env"]` | File extensions to process            |
-| `ignorePatterns` | `string[]`         | `["node_modules/**","dist/**",".git/**"]`           | Glob patterns to ignore               |
-| `outputFormat`   | `"text" \| "json"` | `"text"`                                            | Default output format for `scan`      |
-| `failOnFindings` | `boolean`          | `false`                                             | Default for `scan --fail-on-findings` |
-| `dryRun`         | `boolean`          | `false`                                             | Default dry-run mode for `sanitize`   |
+| Field                | Type               | Default                                             | Description                           |
+| -------------------- | ------------------ | --------------------------------------------------- | ------------------------------------- |
+| `extensions`         | `string[]`         | `["ts","tsx","js","jsx","json","yaml","yml","env"]` | File extensions to process            |
+| `ignorePatterns`     | `string[]`         | `["node_modules/**","dist/**",".git/**"]`           | Glob patterns to ignore               |
+| `outputFormat`       | `"text" \| "json"` | `"text"`                                            | Default output format for `scan`      |
+| `failOnFindings`     | `boolean`          | `false`                                             | Default for `scan --fail-on-findings` |
+| `dryRun`             | `boolean`          | `false`                                             | Default dry-run mode for `sanitize`   |
+| `minConfidence`      | `number`           | `0.5`                                               | Minimum accepted confidence (`0`–`1`) |
+| `disabledCategories` | `string[]`         | `[]`                                                | Categories to suppress                |
 
 > **Note**: `debug-halo init` omits `dryRun` from the generated file, so sanitization writes by default. You can add `"dryRun": true` to configuration or pass `--dry-run` on the command line.
 
@@ -259,47 +263,80 @@ Options are resolved in this order (highest priority last):
   "ignorePatterns": ["**/*.min.js", "**/vendor/**", "coverage/**"],
   "outputFormat": "json",
   "failOnFindings": true,
-  "dryRun": true
+  "dryRun": true,
+  "minConfidence": 0.85,
+  "disabledCategories": ["email", "ip_address"]
 }
 ```
+
+### False-positive controls
+
+- Add file globs to `.debughaloignore` using the same gitignore-style syntax as `.gitignore`.
+- Disable specific categories with `disabledCategories` in `.debughalo.json`.
+- Raise `minConfidence` when only high-confidence findings are desired.
+- Add `debughalo-ignore` on a source line to suppress detections on that line.
+- Add `debughalo-ignore-next-line` on the preceding line to suppress the next source line.
+- Append a category, such as `debughalo-ignore google_api_key`, to limit an inline suppression.
+- Obvious service-credential placeholders containing markers such as `example`, `placeholder`, or `changeme` are suppressed automatically.
+
+Inline suppression comments are explicit source directives; use them only for reviewed values that are safe to retain.
+
+## Severity levels
+
+Every finding includes deterministic `severity`, `confidence`, `detector`, `reason`, and `likelyTestValue` fields in JSON output. Text output shows severity and confidence; verbose text output also shows the reason.
+
+| Severity   | Intended meaning                                                  |
+| ---------- | ----------------------------------------------------------------- |
+| `critical` | Directly usable private keys or high-impact service secrets       |
+| `high`     | Access tokens, credentials, and authenticated service identifiers |
+| `medium`   | Context-dependent or generic secret material                      |
+| `low`      | PII or internal-network indicators with lower credential impact   |
 
 ## 🔍 Supported Detectors
 
 DebugHalo detects various secret types and PII categories:
 
-| Category               | Description                   | Example                                    |
-| ---------------------- | ----------------------------- | ------------------------------------------ |
-| `api_key`              | Generic API keys              | `sk-123...`                                |
-| `stripe_key`           | Stripe API keys               | `sk_live_...`                              |
-| `openai_key`           | OpenAI API keys               | `sk-...`                                   |
-| `anthropic_key`        | Anthropic API keys            | `sk-ant-...`                               |
-| `slack_token`          | Slack OAuth tokens            | `xoxb-...`                                 |
-| `github_token`         | GitHub personal access tokens | `ghp_...`                                  |
-| `private_key`          | PEM private keys              | `-----BEGIN PRIVATE KEY-----`              |
-| `ssh_private_key`      | SSH private keys              | `-----BEGIN OPENSSH PRIVATE KEY-----`      |
-| `pgp_private_key`      | PGP private keys              | `-----BEGIN PGP PRIVATE KEY BLOCK-----`    |
-| `bearer_token`         | Bearer tokens in headers      | `Authorization: Bearer xyz`                |
-| `basic_auth`           | Basic auth in headers         | `Authorization: Basic dXNlcjpwYXNz`        |
-| `authorization_header` | Generic auth headers          | `Authorization: abc123`                    |
-| `api_key_env`          | API keys in env assignments   | `API_KEY=sk-...`                           |
-| `secret_env`           | Generic secrets in env        | `SECRET=xyz`                               |
-| `password_env`         | Passwords in env              | `PASSWORD=secret`                          |
-| `password_config`      | Passwords in config files     | `password: "secret"`                       |
-| `postgres_url`         | PostgreSQL URLs               | `postgres://user:pass@host/db`             |
-| `mysql_url`            | MySQL URLs                    | `mysql://user:pass@host/db`                |
-| `mongodb_url`          | MongoDB URLs                  | `mongodb://user:pass@host/db`              |
-| `redis_url`            | Redis URLs                    | `redis://user:pass@host:6379`              |
-| `database_url`         | Generic database URLs         | `db://user:pass@host/db`                   |
-| `aws_secret_key`       | AWS secret access keys        | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
-| `aws_access_key`       | AWS access key IDs            | `AKIAIOSFODNN7EXAMPLE`                     |
-| `jwt`                  | JSON Web Tokens               | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`  |
-| `email`                | Email addresses               | `user@example.com`                         |
-| `ip_address`           | IPv4/IPv6 addresses           | `192.168.1.1`, `2001:db8::1`               |
-| `internal_url`         | Internal/private URLs         | `http://internal.corp/service`             |
-| `internal_domain`      | Internal domain names         | `internal.corp`, `server.local`            |
-| `generic_secret`       | Generic high-entropy strings  | `x7k9m2p4q8r1s3t5v7y9`                     |
+| Category                | Description                     | Example                                    |
+| ----------------------- | ------------------------------- | ------------------------------------------ |
+| `api_key`               | Generic API keys                | `sk-123...`                                |
+| `stripe_key`            | Stripe API keys                 | `sk_live_...`                              |
+| `openai_key`            | OpenAI API keys                 | `sk-...`                                   |
+| `anthropic_key`         | Anthropic API keys              | `sk-ant-...`                               |
+| `google_api_key`        | Google API keys                 | `AIza...`                                  |
+| `gitlab_token`          | GitLab access tokens            | `glpat-...`                                |
+| `discord_token`         | Discord bot tokens              | Three-segment bot token                    |
+| `stripe_webhook_secret` | Stripe webhook secrets          | `whsec_...`                                |
+| `sendgrid_api_key`      | SendGrid API keys               | `SG....`                                   |
+| `twilio_api_key`        | Twilio API key SIDs             | `SK...`                                    |
+| `oauth_client_secret`   | Contextual OAuth client secrets | `OAUTH_CLIENT_SECRET=...`                  |
+| `azure_client_secret`   | Contextual Azure client secrets | `AZURE_CLIENT_SECRET=...`                  |
+| `slack_token`           | Slack OAuth tokens              | `xoxb-...`                                 |
+| `github_token`          | GitHub personal access tokens   | `ghp_...`                                  |
+| `private_key`           | PEM private keys                | `-----BEGIN PRIVATE KEY-----`              |
+| `ssh_private_key`       | SSH private keys                | `-----BEGIN OPENSSH PRIVATE KEY-----`      |
+| `pgp_private_key`       | PGP private keys                | `-----BEGIN PGP PRIVATE KEY BLOCK-----`    |
+| `bearer_token`          | Bearer tokens in headers        | `Authorization: Bearer xyz`                |
+| `basic_auth`            | Basic auth in headers           | `Authorization: Basic dXNlcjpwYXNz`        |
+| `authorization_header`  | Generic auth headers            | `Authorization: abc123`                    |
+| `api_key_env`           | API keys in env assignments     | `API_KEY=sk-...`                           |
+| `secret_env`            | Generic secrets in env          | `SECRET=xyz`                               |
+| `password_env`          | Passwords in env                | `PASSWORD=secret`                          |
+| `password_config`       | Passwords in config files       | `password: "secret"`                       |
+| `postgres_url`          | PostgreSQL URLs                 | `postgres://user:pass@host/db`             |
+| `mysql_url`             | MySQL URLs                      | `mysql://user:pass@host/db`                |
+| `mongodb_url`           | MongoDB URLs                    | `mongodb://user:pass@host/db`              |
+| `redis_url`             | Redis URLs                      | `redis://user:pass@host:6379`              |
+| `database_url`          | Generic database URLs           | `db://user:pass@host/db`                   |
+| `aws_secret_key`        | AWS secret access keys          | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| `aws_access_key`        | AWS access key IDs              | `AKIAIOSFODNN7EXAMPLE`                     |
+| `jwt`                   | JSON Web Tokens                 | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...`  |
+| `email`                 | Email addresses                 | `user@example.com`                         |
+| `ip_address`            | IPv4/IPv6 addresses             | `192.168.1.1`, `2001:db8::1`               |
+| `internal_url`          | Internal/private URLs           | `http://internal.corp/service`             |
+| `internal_domain`       | Internal domain names           | `internal.corp`, `server.local`            |
+| `generic_secret`        | Generic high-entropy strings    | `x7k9m2p4q8r1s3t5v7y9`                     |
 
-> **Note**: The type system defines additional categories (e.g., `aws_session_token`, `gitlab_token`, `discord_token`, `stripe_webhook_secret`, `sendgrid_api_key`, `generic_token`, `password`, `phone`, `ssn`, `credit_card`, `localhost_url`) that are not yet backed by active detectors. Only categories listed above are actively detected.
+> **Note**: The type system defines additional categories (e.g., `aws_session_token`, `generic_token`, `password`, `phone`, `ssn`, `credit_card`, `localhost_url`) that are not yet backed by active detectors. Only categories listed above are actively detected.
 
 ## 🛡️ Safety Features
 
@@ -307,6 +344,7 @@ DebugHalo detects various secret types and PII categories:
 - **Binary file skipping**: Files containing NUL bytes are automatically skipped
 - **Bounded text input**: UTF-8 text is supported up to the core 10 MiB input limit; oversized inputs fail without an unbounded whole-file read
 - **`.gitignore` respected**: Patterns from local `.gitignore` are automatically applied
+- **Dedicated ignore file**: `.debughaloignore` excludes tool-specific file globs without changing Git behavior
 - **Default exclusions**: `.git/**`, `node_modules/**`, `dist/**`, `coverage/**` are always ignored
 - **Dry-run mode**: Preview sanitization changes without writing files
 - **Safer replacement**: Sanitized content is written to a temporary file in the same directory and atomically replaces the regular target; no persistent backup copy is created

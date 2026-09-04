@@ -41,16 +41,18 @@ function isInsideRoot(relativePath: string): boolean {
   return relativePath !== '..' && !relativePath.startsWith('../') && !isAbsolute(relativePath);
 }
 
-function buildIgnore(extraPatterns: string[] = [], gitignoreFilePath?: string): Ignore {
+function buildIgnore(extraPatterns: string[] = [], ignoreFilePaths: string[] = []): Ignore {
   const matcher = createIgnore();
 
   matcher.add(DEFAULT_EXCLUSIONS);
 
-  if (gitignoreFilePath && existsSync(gitignoreFilePath)) {
-    try {
-      matcher.add(readFileSync(gitignoreFilePath, 'utf8'));
-    } catch {
-      // Ignore unreadable .gitignore files.
+  for (const ignoreFilePath of ignoreFilePaths) {
+    if (existsSync(ignoreFilePath)) {
+      try {
+        matcher.add(readFileSync(ignoreFilePath, 'utf8'));
+      } catch {
+        // Ignore unreadable ignore files; file processing errors remain independent.
+      }
     }
   }
 
@@ -106,7 +108,10 @@ export async function discoverFiles(
     throw new FileDiscoveryError(`No valid input paths found: ${inputs.join(', ')}`);
 
   const gitignorePath = respectGitignore ? resolve(cwd, '.gitignore') : undefined;
-  const optionLevelIgnore = buildIgnore(ignorePatterns, gitignorePath);
+  const cwdIgnoreFiles = [gitignorePath, resolve(cwd, '.debughaloignore')].filter(
+    (path): path is string => path !== undefined
+  );
+  const optionLevelIgnore = buildIgnore(ignorePatterns, cwdIgnoreFiles);
 
   const results = new Set<string>();
 
@@ -134,11 +139,9 @@ export async function discoverFiles(
 
     if (c.kind === 'directory') {
       const directoryPath = c.path;
-      const applicableGitignorePath = respectGitignore
-        ? resolve(directoryPath, '.gitignore')
-        : undefined;
-
-      const directoryIgnore = buildIgnore(ignorePatterns, applicableGitignorePath);
+      const directoryIgnoreFiles = [resolve(directoryPath, '.debughaloignore')];
+      if (respectGitignore) directoryIgnoreFiles.push(resolve(directoryPath, '.gitignore'));
+      const directoryIgnore = buildIgnore(ignorePatterns, directoryIgnoreFiles);
 
       const matches = await fastGlob('**/*', {
         cwd: directoryPath,

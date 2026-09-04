@@ -38,3 +38,4 @@ export { createAwsAccessKeyDetector } from './awsAccessKey.js';
 export { createGithubTokenDetector } from './githubToken.js';
 export { createSlackTokenDetector } from './slackToken.js';
 export { createGenericSecretDetector } from './genericSecret.js';
+export { createServiceCredentialDetector } from './serviceCredentials.js';

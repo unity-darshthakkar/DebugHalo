@@ -9,6 +9,17 @@ import {
 
 describe('CLI Config Module', () => {
   describe('validateConfig', () => {
+    it('validates detection quality controls', () => {
+      expect(validateConfig({ minConfidence: 0.9, disabledCategories: ['email'] })).toEqual({
+        minConfidence: 0.9,
+        disabledCategories: ['email'],
+      });
+      expect(() => validateConfig({ minConfidence: 2 })).toThrow('between 0 and 1');
+      expect(() => validateConfig({ disabledCategories: ['not_real'] })).toThrow(
+        'Unknown detection category'
+      );
+    });
+
     it('accepts empty object', () => {
       const result = validateConfig({});
       expect(result).toEqual({});

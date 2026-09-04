@@ -3,6 +3,7 @@
  *
  * Defines the configuration shape for .debughalo.json
  */
+import { ALL_CATEGORIES } from '../types/core.js';
 
 export interface DebugHaloConfig {
   /** File extensions to scan/sanitize */
@@ -15,6 +16,10 @@ export interface DebugHaloConfig {
   failOnFindings?: boolean;
   /** Whether to run in dry-run mode (sanitize command) */
   dryRun?: boolean;
+  /** Minimum detection confidence from 0 through 1 */
+  minConfidence?: number;
+  /** Detection categories to suppress */
+  disabledCategories?: string[];
 }
 
 /**
@@ -31,6 +36,8 @@ export const DEFAULT_CONFIG: Required<DebugHaloConfig> = {
   outputFormat: 'text',
   failOnFindings: false,
   dryRun: false,
+  minConfidence: 0.5,
+  disabledCategories: [],
 };
 
 /**
@@ -103,6 +110,29 @@ export function validateConfig(config: unknown): DebugHaloConfig {
     validated.dryRun = dryRun as boolean;
   }
 
+  if (Object.prototype.hasOwnProperty.call(obj, 'minConfidence')) {
+    const minConfidence = obj['minConfidence'];
+    if (typeof minConfidence !== 'number' || minConfidence < 0 || minConfidence > 1) {
+      throw new Error('Config "minConfidence" must be a number between 0 and 1');
+    }
+    validated.minConfidence = minConfidence;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(obj, 'disabledCategories')) {
+    const disabledCategories = obj['disabledCategories'];
+    if (
+      !Array.isArray(disabledCategories) ||
+      disabledCategories.some((item) => typeof item !== 'string')
+    ) {
+      throw new Error('Config "disabledCategories" must be an array of strings');
+    }
+    const unknown = disabledCategories.find(
+      (item) => !ALL_CATEGORIES.includes(item as (typeof ALL_CATEGORIES)[number])
+    );
+    if (unknown) throw new Error(`Unknown detection category: "${String(unknown)}"`);
+    validated.disabledCategories = disabledCategories as string[];
+  }
+
   // Reject unknown properties
   const knownKeys = new Set([
     'extensions',
@@ -110,6 +140,8 @@ export function validateConfig(config: unknown): DebugHaloConfig {
     'outputFormat',
     'failOnFindings',
     'dryRun',
+    'minConfidence',
+    'disabledCategories',
   ]);
   for (const key of Object.keys(obj)) {
     if (!knownKeys.has(key)) {
@@ -133,6 +165,8 @@ export function mergeConfig(
     outputFormat: config.outputFormat ?? defaults.outputFormat,
     failOnFindings: config.failOnFindings ?? defaults.failOnFindings,
     dryRun: config.dryRun ?? defaults.dryRun,
+    minConfidence: config.minConfidence ?? defaults.minConfidence,
+    disabledCategories: config.disabledCategories ?? defaults.disabledCategories,
   };
 }
 
@@ -146,6 +180,8 @@ export function createDefaultConfigFile(): string {
       ignorePatterns: DEFAULT_CONFIG.ignorePatterns,
       outputFormat: DEFAULT_CONFIG.outputFormat,
       failOnFindings: DEFAULT_CONFIG.failOnFindings,
+      minConfidence: DEFAULT_CONFIG.minConfidence,
+      disabledCategories: DEFAULT_CONFIG.disabledCategories,
     },
     null,
     2

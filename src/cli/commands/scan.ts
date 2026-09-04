@@ -9,6 +9,7 @@ import { discoverFiles, FileDiscoveryError } from '../utils/fileDiscovery.js';
 import { readFileSafe } from '../utils/fileReading.js';
 import { relative } from 'path';
 import chalk from 'chalk';
+import type { DetectionCategory, DetectionSeverity } from '../../types/core.js';
 
 export interface ScanFinding {
   file: string;
@@ -19,6 +20,10 @@ export interface ScanFinding {
   line?: number;
   column?: number;
   preview?: string;
+  detector: string;
+  severity: DetectionSeverity;
+  reason?: string;
+  likelyTestValue: boolean;
 }
 
 export interface ScanSummary {
@@ -43,6 +48,8 @@ export interface ScanOptions {
   failOnFindings: boolean;
   verbose: boolean;
   cwd?: string;
+  minConfidence?: number;
+  disabledCategories?: string[];
 }
 
 /**
@@ -105,6 +112,9 @@ function toScanFinding(
     range: { start: number; end: number; startLine: number; startColumn: number };
     value: string;
     detectorName: string;
+    severity?: DetectionSeverity;
+    reason?: string;
+    likelyTestValue?: boolean;
   }
 ): ScanFinding {
   return {
@@ -116,6 +126,10 @@ function toScanFinding(
     line: detection.range.startLine,
     column: detection.range.startColumn,
     preview: createPreview(detection),
+    detector: detection.detectorName,
+    severity: detection.severity ?? 'medium',
+    reason: detection.reason,
+    likelyTestValue: detection.likelyTestValue ?? false,
   };
 }
 
@@ -174,7 +188,10 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
 
     // Detect secrets
     try {
-      const detections = await detectOnly(content, { minConfidence: 0.5 });
+      const detections = await detectOnly(content, {
+        minConfidence: options.minConfidence ?? 0.5,
+        disabledCategories: options.disabledCategories as DetectionCategory[] | undefined,
+      });
       filesScanned++;
 
       for (const detection of detections) {
@@ -248,7 +265,10 @@ export function outputText(result: ScanResult, verbose: boolean): void {
         : finding.file;
     const category = chalk.cyan(finding.category.toUpperCase());
     const confidence = finding.confidence.toFixed(2);
-    console.log(`  ${chalk.dim(location)}  ${category}  confidence=${confidence}`);
+    console.log(
+      `  ${chalk.dim(location)}  ${category}  severity=${finding.severity}  confidence=${confidence}`
+    );
+    if (verbose && finding.reason) console.log(chalk.dim(`    ${finding.reason}`));
   }
 
   console.log('');

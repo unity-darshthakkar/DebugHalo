@@ -112,6 +112,14 @@ describe('File Discovery', { timeout: 10000 }, () => {
     expect(result).toContain(resolve(testDir, 'app.ts'));
   });
 
+  it('respects .debughaloignore independently of .gitignore', async () => {
+    writeFile(testDir, 'app.ts', 'app');
+    writeFile(testDir, 'fixture.secret', 'secret');
+    writeFile(testDir, '.debughaloignore', '*.secret');
+    const result = await discoverFiles([testDir], { cwd, respectGitignore: false });
+    expect(result).toEqual([resolve(testDir, 'app.ts')]);
+  });
+
   it('excludes default directories (.git, node_modules, dist, coverage)', async () => {
     writeFile(join(testDir, '.git'), 'config', 'git');
     writeFile(join(testDir, 'node_modules', 'pkg'), 'index.js', 'mod');

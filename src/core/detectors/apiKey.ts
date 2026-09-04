@@ -107,7 +107,7 @@ function createHighConfidenceDetector(): new () => BaseDetector {
             match.index + match[0].length,
             'aws_access_key' as DetectionCategory,
             this.confidence,
-            { contextWindow }
+            { contextWindow, reason: 'AWS access key with a recognized prefix' }
           )
         );
       }
@@ -125,7 +125,7 @@ function createHighConfidenceDetector(): new () => BaseDetector {
               match.index + match[0].length,
               category,
               this.confidence,
-              { contextWindow }
+              { contextWindow, reason: `${category} credential with a recognized key prefix` }
             )
           );
         }

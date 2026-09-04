@@ -12,6 +12,7 @@ import type {
   DetectionOptions,
   DetectionValidator,
 } from '../../types/core.js';
+import { enrichDetection } from '../detectionPolicy.js';
 
 /**
  * Detection pattern definition
@@ -62,7 +63,7 @@ export abstract class BaseDetector {
     const value = input.slice(start, end);
     const contextWindow = options?.contextWindow ?? 50;
     const { before, after } = this.extractContext(input, start, end, contextWindow);
-    return {
+    return enrichDetection(input, {
       id: `${this.name}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       category,
       value,
@@ -74,7 +75,7 @@ export abstract class BaseDetector {
           ? `${options.contextBefore}...${value}...${options.contextAfter}`
           : options?.contextBefore || options?.contextAfter || `${before}...${value}...${after}`,
       reason: options?.reason,
-    };
+    });
   }
 
   /**
