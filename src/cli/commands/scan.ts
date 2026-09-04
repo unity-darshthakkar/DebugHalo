@@ -5,9 +5,14 @@
  */
 
 import { detectOnly } from '../../core/pipeline.js';
-import { discoverFiles, FileDiscoveryError } from '../utils/fileDiscovery.js';
-import { readFileSafe } from '../utils/fileReading.js';
-import { relative } from 'path';
+import {
+  discoverFiles,
+  FileDiscoveryError,
+  isDiscoveryPathIgnored,
+} from '../utils/fileDiscovery.js';
+import { readBufferSafe, readFileSafe, type FileReadResult } from '../utils/fileReading.js';
+import { listStagedFiles } from '../utils/git.js';
+import { extname, relative } from 'path';
 import chalk from 'chalk';
 import type { DetectionCategory, DetectionSeverity } from '../../types/core.js';
 
@@ -50,6 +55,7 @@ export interface ScanOptions {
   cwd?: string;
   minConfidence?: number;
   disabledCategories?: string[];
+  staged?: boolean;
 }
 
 /**
@@ -151,35 +157,51 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
   const normalizedExtensions = normalizeExtensions(extensions);
   const normalizedIgnore = normalizeIgnorePatterns(ignorePatterns);
 
-  // Discover files
-  let discoveredFiles: string[];
-  try {
-    discoveredFiles = await discoverFiles(paths, {
-      cwd: workingDir,
-      extensions: normalizedExtensions.length > 0 ? normalizedExtensions : undefined,
-      ignorePatterns: normalizedIgnore,
-      respectGitignore: true,
-    });
-  } catch (err) {
-    if (err instanceof FileDiscoveryError) {
-      // Discovery failed - throw controlled error
-      throw new Error(err.message);
+  let scanInputs: Array<{ file: string; read: () => FileReadResult }>;
+  if (options.staged) {
+    const staged = listStagedFiles(workingDir);
+    scanInputs = staged.files
+      .filter((file) => {
+        const extension = extname(file.path).slice(1).toLowerCase();
+        return (
+          (normalizedExtensions.length === 0 || normalizedExtensions.includes(extension)) &&
+          !isDiscoveryPathIgnored(file.path, staged.root, normalizedIgnore, true)
+        );
+      })
+      .map((file) => ({ file: file.path, read: () => readBufferSafe(file.content) }));
+  } else {
+    let discoveredFiles: string[];
+    try {
+      discoveredFiles = await discoverFiles(paths, {
+        cwd: workingDir,
+        extensions: normalizedExtensions.length > 0 ? normalizedExtensions : undefined,
+        ignorePatterns: normalizedIgnore,
+        respectGitignore: true,
+      });
+    } catch (err) {
+      if (err instanceof FileDiscoveryError) {
+        throw new Error(err.message);
+      }
+      throw err;
     }
-    throw err;
+    scanInputs = discoveredFiles.map((file) => ({
+      file: relative(workingDir, file),
+      read: () => readFileSafe(file),
+    }));
   }
 
-  const filesDiscovered = discoveredFiles.length;
+  const filesDiscovered = scanInputs.length;
   const errors: Array<{ file: string; message: string }> = [];
   const findings: ScanFinding[] = [];
   let filesScanned = 0;
   let filesSkipped = 0;
   let filesFailed = 0;
 
-  for (const filePath of discoveredFiles) {
+  for (const scanInput of scanInputs) {
     // Read file (handles missing/binary/unreadable files)
-    const { content, error } = readFileSafe(filePath);
+    const { content, error } = scanInput.read();
     if (error) {
-      errors.push({ file: relative(workingDir, filePath), message: error });
+      errors.push({ file: scanInput.file, message: error });
       if (error === 'Binary file skipped') {
         filesSkipped++;
       } else {
@@ -197,12 +219,11 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
       filesScanned++;
 
       for (const detection of detections) {
-        const relativePath = relative(workingDir, filePath);
-        findings.push(toScanFinding(relativePath, detection));
+        findings.push(toScanFinding(scanInput.file, detection));
       }
     } catch (err) {
       errors.push({
-        file: relative(workingDir, filePath),
+        file: scanInput.file,
         message: err instanceof Error ? err.message : String(err),
       });
       filesFailed++;

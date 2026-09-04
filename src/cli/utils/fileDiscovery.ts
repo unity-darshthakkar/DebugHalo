@@ -69,6 +69,17 @@ function buildIgnore(extraPatterns: string[] = [], ignoreFilePaths: string[] = [
   return matcher;
 }
 
+export function isDiscoveryPathIgnored(
+  relativePath: string,
+  root: string,
+  ignorePatterns: string[] = [],
+  respectGitignore = true
+): boolean {
+  const ignoreFiles = [resolve(root, '.debughaloignore')];
+  if (respectGitignore) ignoreFiles.push(resolve(root, '.gitignore'));
+  return buildIgnore(ignorePatterns, ignoreFiles).ignores(relativePath.replaceAll('\\', '/'));
+}
+
 type ClassifiedInput =
   | { kind: 'file'; path: string }
   | { kind: 'directory'; path: string }

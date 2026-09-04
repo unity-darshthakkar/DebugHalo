@@ -16,6 +16,7 @@ import { runScan, outputText } from './commands/scan.js';
 import { runSanitize, outputText as outputSanitizeText } from './commands/sanitize.js';
 import { runRestore, outputRestoreText } from './commands/restore.js';
 import { runShare, outputShareText } from './commands/share.js';
+import { runHook, outputHookStatus, type HookAction } from './commands/hook.js';
 import {
   loadConfig,
   applyCliOptions,
@@ -187,6 +188,7 @@ program
   .option('-f, --format <format>', 'Output format: text, json, jsonl, sarif')
   .option('-o, --output <path-or-format>', 'Output file, or legacy text/json format selector')
   .option('--fail-on-findings', 'Exit with non-zero code if findings detected')
+  .option('--staged', 'Scan the content currently staged in Git')
   .action(async (paths, _options, scanCommand) => {
     const globalOpts = program.opts();
     const verbose = globalOpts['verbose'] ?? false;
@@ -232,6 +234,7 @@ program
         cwd,
         minConfidence: mergedConfig.minConfidence,
         disabledCategories: mergedConfig.disabledCategories,
+        staged: scanCommand.opts()['staged'] ?? false,
       });
 
       const rawOutput = scanCommand.opts()['output'] as string | undefined;
@@ -271,6 +274,24 @@ program
         console.error(JSON.stringify({ error: message }, null, 2));
       }
       process.exitCode = 2;
+    }
+  });
+
+program
+  .command('hook')
+  .description('Manage the DebugHalo pre-commit hook')
+  .argument('<action>', 'Action: install, uninstall, status')
+  .action((action: string) => {
+    if (!['install', 'uninstall', 'status'].includes(action)) {
+      console.error(chalk.red('Error:'), 'Hook action must be install, uninstall, or status');
+      process.exitCode = 2;
+      return;
+    }
+    try {
+      const status = runHook(action as HookAction, process.cwd());
+      if (!(program.opts()['quiet'] ?? false)) outputHookStatus(action as HookAction, status);
+    } catch (error) {
+      reportFatalError(error);
     }
   });
 

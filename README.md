@@ -115,6 +115,7 @@ debug-halo scan [paths...] [options]
 | `-f, --format <format>`      | `text`, `json`, `jsonl`, or `sarif`       | `text`                            |
 | `-o, --output <path>`        | Write machine output to a file            | Standard output                   |
 | `--fail-on-findings`         | Exit with code 1 if any findings detected | `false`                           |
+| `--staged`                   | Scan staged Git index content only        | `false`                           |
 | `-q, --quiet`                | Suppress nonessential text output         | `false`                           |
 | `--no-color`                 | Disable ANSI color output                 | `false`                           |
 | `-c, --config <path>`        | Path to config file                       | Auto-discovered `.debughalo.json` |
@@ -152,7 +153,52 @@ debug-halo scan --fail-on-findings
 
 # Use explicit config file
 debug-halo scan --config ./configs/debug-halo.json
+
+# Scan exactly what is staged for the next commit
+debug-halo scan --staged --fail-on-findings
 ```
+
+With `--staged`, DebugHalo finds the repository root and reads regular-file snapshots directly
+from Git's index. Deleted files, unstaged edits, and untracked files are excluded; rename and copy
+destinations are scanned. Existing extension, `.debughaloignore`, suppression, confidence,
+category, structured-output, quiet, color, and exit-code behavior still applies. No staged files is
+a clean successful scan.
+
+### `debug-halo hook`
+
+Manage a non-interactive pre-commit guard for the current repository:
+
+```bash
+npx debug-halo hook install
+npx debug-halo hook status
+npx debug-halo hook uninstall
+```
+
+The managed hook invokes the project-local `node_modules/.bin/debug-halo` with `scan --staged
+--fail-on-findings`. It blocks commits on findings or processing failures, never sanitizes or
+modifies files, and never prints raw values. Installation uses Git's resolved hooks directory,
+including `core.hooksPath`, and creates that directory when needed.
+
+Installation and removal are idempotent. DebugHalo refuses to overwrite an unrelated existing
+`pre-commit` hook. Uninstall removes only an exact DebugHalo-managed hook; unexpected additional or
+malformed managed content is left untouched with an error.
+
+Recommended workflow:
+
+```bash
+npm install --save-dev --save-exact debug-halo
+npx debug-halo hook install
+git add .
+git commit -m "example"
+```
+
+If findings exist, the commit is blocked before completion. Run `npx debug-halo scan --staged` to
+review them. DebugHalo does not automatically sanitize staged content.
+
+If a Git command reports that no repository is available, run it from inside the intended working
+tree. Use `git config --get core.hooksPath` and `npx debug-halo hook status` when troubleshooting a
+custom hooks directory. If status reports an unrelated hook, integrate the tools manually rather
+than replacing that hook.
 
 ### `debug-halo sanitize`
 
@@ -485,7 +531,7 @@ runs the upload step even when the scan reports findings.
 - **No Chrome extension** — CLI only
 - **No AI integrations** — Standalone detector/sanitizer
 - **Limited detector set** — Covers common secret types; not exhaustive
-- **No incremental scanning** — Full scan each run
+- **No scan cache** — Normal scans reprocess selected files; `scan --staged` limits input to Git index snapshots
 
 ## Supported Platforms
 
