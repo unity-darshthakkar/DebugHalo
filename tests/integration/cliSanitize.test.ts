@@ -61,6 +61,24 @@ function runCli(args: string[], workingDir: string): Promise<CliResult> {
 }
 
 describe('CLI Integration - Sanitize Command', { timeout: 30000 }, () => {
+  it('respects .debughaloignore during sanitize', async () => {
+    writeFile(testDir, '.debughaloignore', 'ignored.ts\n');
+    writeFile(testDir, 'ignored.ts', `const key = 'AIza${'Ab3_'.repeat(8)}Ab3';`);
+    writeFile(testDir, 'clean.ts', 'const value = 42;');
+
+    const { stdout, exitCode } = await runCli(['sanitize', testDir, '--dry-run'], testDir);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('No files would be changed');
+    expect(readFile(testDir, 'ignored.ts')).toContain('AIza');
+  });
+
+  it('sanitizes a newly supported credential with its category alias', async () => {
+    writeFile(testDir, 'google.ts', `const key = 'AIza${'Ab3_'.repeat(8)}Ab3';`);
+    const { exitCode } = await runCli(['sanitize', testDir], testDir);
+    expect(exitCode).toBe(1);
+    expect(readFile(testDir, 'google.ts')).toContain('<GOOGLE_API_KEY_1>');
+  });
+
   let testDir: string;
 
   beforeEach(async () => {

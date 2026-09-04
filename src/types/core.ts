@@ -26,6 +26,10 @@ export type DetectionCategory =
   | 'sendgrid_api_key'
   | 'openai_key'
   | 'anthropic_key'
+  | 'google_api_key'
+  | 'twilio_api_key'
+  | 'oauth_client_secret'
+  | 'azure_client_secret'
   | 'generic_token'
   | 'generic_secret'
   | 'jwt'
@@ -71,6 +75,10 @@ export const ALL_CATEGORIES: readonly DetectionCategory[] = [
   'sendgrid_api_key',
   'openai_key',
   'anthropic_key',
+  'google_api_key',
+  'twilio_api_key',
+  'oauth_client_secret',
+  'azure_client_secret',
   'generic_token',
   'generic_secret',
   'jwt',
@@ -104,6 +112,8 @@ export const ALL_CATEGORIES: readonly DetectionCategory[] = [
  * Confidence level of a detection (0.0 to 1.0)
  */
 export type DetectionConfidence = number & { readonly __brand: 'DetectionConfidence' };
+
+export type DetectionSeverity = 'critical' | 'high' | 'medium' | 'low';
 
 /**
  * Create a branded DetectionConfidence value
@@ -159,6 +169,10 @@ export interface DetectionResult {
   readonly context?: string;
   /** Human-readable reason for this detection (e.g., 'AWS secret key with context', 'GitHub PAT prefix ghp_') */
   readonly reason?: string;
+  /** Stable impact classification derived from the category */
+  readonly severity?: DetectionSeverity;
+  /** True when nearby source context suggests fixture, mock, or example data */
+  readonly likelyTestValue?: boolean;
 }
 
 /**

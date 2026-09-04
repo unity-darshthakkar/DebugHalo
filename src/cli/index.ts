@@ -213,6 +213,8 @@ program
         failOnFindings: mergedConfig.failOnFindings,
         verbose,
         cwd,
+        minConfidence: mergedConfig.minConfidence,
+        disabledCategories: mergedConfig.disabledCategories,
       });
 
       if (mergedConfig.outputFormat === 'json') {
@@ -276,6 +278,8 @@ program
         dryRun: mergedConfig.dryRun,
         verbose,
         cwd,
+        minConfidence: mergedConfig.minConfidence,
+        disabledCategories: mergedConfig.disabledCategories,
       });
 
       outputSanitizeText(result, mergedConfig.dryRun, verbose);

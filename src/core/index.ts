@@ -11,6 +11,7 @@ import type { DebugBundleOutput } from '../types/core.js';
 export type {
   DetectionCategory,
   DetectionConfidence,
+  DetectionSeverity,
   SourceRange,
   DetectionResult,
   AliasEntry,
@@ -90,6 +91,9 @@ export { createAwsSecretKeyDetector } from './detectors/awsSecretKey.js';
 export { createGithubTokenDetector } from './detectors/githubToken.js';
 export { createSlackTokenDetector } from './detectors/slackToken.js';
 export { createGenericSecretDetector } from './detectors/genericSecret.js';
+export { createServiceCredentialDetector } from './detectors/serviceCredentials.js';
+
+export { severityForCategory, isObviousPlaceholder } from './detectionPolicy.js';
 
 // Sanitization
 export { sanitize, sanitizeWithCustomAliases, sanitizeLayered } from './sanitizer.js';

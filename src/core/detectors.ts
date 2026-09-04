@@ -18,6 +18,8 @@ import type {
   PipelineConfig,
 } from '../types/core.js';
 import { BaseDetector } from './detectors/baseDetector.js';
+import { applyDetectionPolicy, enrichDetection } from './detectionPolicy.js';
+import { createServiceCredentialDetector } from './detectors/serviceCredentials.js';
 
 // Import all built-in detector factories at module load time
 import { createApiKeyDetector, createApiKeyMediumDetector } from './detectors/apiKey.js';
@@ -69,6 +71,17 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   pgp_private_key: 100,
   aws_secret_key: 95,
   aws_access_key: 95,
+  openai_key: 98,
+  anthropic_key: 98,
+  stripe_key: 98,
+  stripe_webhook_secret: 98,
+  google_api_key: 96,
+  gitlab_token: 96,
+  discord_token: 96,
+  twilio_api_key: 96,
+  sendgrid_api_key: 98,
+  azure_client_secret: 92,
+  oauth_client_secret: 88,
   jwt: 90,
   github_token: 85,
   slack_token: 85,
@@ -126,6 +139,7 @@ function initBuiltinDetectors(): void {
   registerBuiltinDetector(createGithubTokenDetector());
   registerBuiltinDetector(createSlackTokenDetector());
   registerBuiltinDetector(createGenericSecretDetector());
+  registerBuiltinDetector(createServiceCredentialDetector());
 
   // Sort detectors by category priority (highest first)
   detectorRegistry.detectors.sort((a, b) => {
@@ -179,7 +193,9 @@ export function detect(input: string, config: DetectionOptions): ReadonlyArray<D
   const filtered = allDetections.filter((d) => d.confidence >= (config.threshold ?? 0.5));
 
   // Resolve overlaps
-  return resolveOverlaps(filtered);
+  return resolveOverlaps(
+    applyDetectionPolicy(input, filtered, config.categories, config.disabledCategories)
+  );
 }
 
 /**
@@ -270,7 +286,7 @@ export function createDetection(
   const startColumn = start - textBeforeStart.lastIndexOf('\n');
   const endColumn = end - textBeforeEnd.lastIndexOf('\n');
 
-  return {
+  return enrichDetection(input, {
     id: `${options.detectorName}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     category,
     value,
@@ -278,7 +294,7 @@ export function createDetection(
     range: { start, end, startLine, endLine, startColumn, endColumn },
     detectorName: options.detectorName,
     context: includeContext ? `${contextBefore}...${value}...${contextAfter}` : undefined,
-  };
+  });
 }
 
 /**

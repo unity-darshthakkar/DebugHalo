@@ -11,6 +11,7 @@ import { readFileSafe } from '../utils/fileReading.js';
 import { assertNotSymbolicLink, atomicWriteFile } from '../utils/atomicWrite.js';
 import { relative } from 'path';
 import chalk from 'chalk';
+import type { DetectionCategory } from '../../types/core.js';
 
 export interface SanitizeFileResult {
   file: string;
@@ -41,6 +42,8 @@ export interface SanitizeOptions {
   dryRun: boolean;
   verbose: boolean;
   cwd?: string;
+  minConfidence?: number;
+  disabledCategories?: string[];
 }
 
 /**
@@ -81,7 +84,9 @@ export function normalizeIgnorePatterns(input: string[]): string[] {
 async function sanitizeFile(
   filePath: string,
   workingDir: string,
-  dryRun: boolean
+  dryRun: boolean,
+  minConfidence: number,
+  disabledCategories: string[]
 ): Promise<SanitizeFileResult> {
   const relativePath = relative(workingDir, filePath);
 
@@ -109,7 +114,10 @@ async function sanitizeFile(
 
   // Run sanitization via core pipeline
   try {
-    const result = await sanitizeText(content, { minConfidence: 0.5 });
+    const result = await sanitizeText(content, {
+      minConfidence,
+      disabledCategories: disabledCategories as DetectionCategory[],
+    });
     const changed = result.sanitizedText !== content;
     const findings = result.detections.length;
 
@@ -173,7 +181,13 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
   const results: SanitizeFileResult[] = [];
 
   for (const filePath of discoveredFiles) {
-    const fileResult = await sanitizeFile(filePath, workingDir, dryRun);
+    const fileResult = await sanitizeFile(
+      filePath,
+      workingDir,
+      dryRun,
+      options.minConfidence ?? 0.5,
+      options.disabledCategories ?? []
+    );
 
     if (fileResult.error) {
       if (fileResult.error === 'Binary file skipped') {
