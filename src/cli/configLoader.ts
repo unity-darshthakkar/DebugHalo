@@ -150,6 +150,8 @@ export function applyCliOptions(
     dryRun?: boolean;
     minConfidence?: number;
     disabledCategories?: string[];
+    vaultPath?: string;
+    outputDirectory?: string;
   }
 ): Required<DebugHaloConfig> {
   return {
@@ -160,5 +162,7 @@ export function applyCliOptions(
     dryRun: cliOptions.dryRun ?? config.dryRun,
     minConfidence: cliOptions.minConfidence ?? config.minConfidence,
     disabledCategories: cliOptions.disabledCategories ?? config.disabledCategories,
+    vaultPath: cliOptions.vaultPath ?? config.vaultPath,
+    outputDirectory: cliOptions.outputDirectory ?? config.outputDirectory,
   };
 }

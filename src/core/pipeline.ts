@@ -13,6 +13,7 @@ import type {
   DetectionResult,
   SanitizationResult,
   DetectionCategory,
+  AliasVault,
 } from '../types/core.js';
 import { detect } from './detectors.js';
 import { sanitize } from './sanitizer.js';
@@ -100,7 +101,8 @@ export async function runPipeline(
  */
 export async function sanitizeText(
   text: string,
-  config: PipelineConfig = {}
+  config: PipelineConfig = {},
+  vault?: AliasVault
 ): Promise<SanitizationResult> {
   // Normalize
   const processedText = config.normalizeLineEndings !== false ? normalizeLineEndings(text) : text;
@@ -114,8 +116,7 @@ export async function sanitizeText(
   const filtered = detections.filter((d) => d.confidence >= minConfidence);
 
   // Sanitize
-  const vault = createAliasVault();
-  return sanitize(processedText, filtered, vault);
+  return sanitize(processedText, filtered, vault ?? createAliasVault());
 }
 
 /**

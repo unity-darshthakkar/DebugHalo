@@ -20,6 +20,10 @@ export interface DebugHaloConfig {
   minConfidence?: number;
   /** Detection categories to suppress */
   disabledCategories?: string[];
+  /** Plaintext local alias vault path */
+  vaultPath?: string;
+  /** Default directory for locally prepared share copies */
+  outputDirectory?: string;
 }
 
 /**
@@ -38,6 +42,8 @@ export const DEFAULT_CONFIG: Required<DebugHaloConfig> = {
   dryRun: false,
   minConfidence: 0.5,
   disabledCategories: [],
+  vaultPath: '',
+  outputDirectory: 'debughalo-output',
 };
 
 /**
@@ -133,6 +139,16 @@ export function validateConfig(config: unknown): DebugHaloConfig {
     validated.disabledCategories = disabledCategories as string[];
   }
 
+  for (const key of ['vaultPath', 'outputDirectory'] as const) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const value = obj[key];
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        throw new Error(`Config "${key}" must be a non-empty string`);
+      }
+      validated[key] = value;
+    }
+  }
+
   // Reject unknown properties
   const knownKeys = new Set([
     'extensions',
@@ -142,6 +158,8 @@ export function validateConfig(config: unknown): DebugHaloConfig {
     'dryRun',
     'minConfidence',
     'disabledCategories',
+    'vaultPath',
+    'outputDirectory',
   ]);
   for (const key of Object.keys(obj)) {
     if (!knownKeys.has(key)) {
@@ -167,6 +185,8 @@ export function mergeConfig(
     dryRun: config.dryRun ?? defaults.dryRun,
     minConfidence: config.minConfidence ?? defaults.minConfidence,
     disabledCategories: config.disabledCategories ?? defaults.disabledCategories,
+    vaultPath: config.vaultPath ?? defaults.vaultPath,
+    outputDirectory: config.outputDirectory ?? defaults.outputDirectory,
   };
 }
 
@@ -182,6 +202,7 @@ export function createDefaultConfigFile(): string {
       failOnFindings: DEFAULT_CONFIG.failOnFindings,
       minConfidence: DEFAULT_CONFIG.minConfidence,
       disabledCategories: DEFAULT_CONFIG.disabledCategories,
+      outputDirectory: DEFAULT_CONFIG.outputDirectory,
     },
     null,
     2

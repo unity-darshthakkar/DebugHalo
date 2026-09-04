@@ -11,6 +11,8 @@ import {
   renameSync,
   unlinkSync,
   writeFileSync,
+  mkdirSync,
+  existsSync,
 } from 'fs';
 import { randomUUID } from 'crypto';
 import { dirname, join } from 'path';
@@ -105,5 +107,22 @@ export function atomicWriteFile(
         // Preserve the operation failure rather than masking it with cleanup.
       }
     }
+  }
+}
+
+/** Safely create or replace a generated output file without exposing partial content. */
+export function atomicWriteOutput(filePath: string, content: string): void {
+  mkdirSync(dirname(filePath), { recursive: true });
+  if (existsSync(filePath)) {
+    atomicWriteFile(filePath, content);
+    return;
+  }
+
+  const tempPath = join(dirname(filePath), `${TEMP_FILE_PREFIX}${process.pid}-${randomUUID()}.tmp`);
+  try {
+    writeFileSync(tempPath, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    renameSync(tempPath, filePath);
+  } finally {
+    if (existsSync(tempPath)) unlinkSync(tempPath);
   }
 }

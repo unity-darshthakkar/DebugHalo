@@ -110,6 +110,15 @@ export {
 } from './restorer.js';
 export type { RestorationValidation } from './restorer.js';
 
+export {
+  DEFAULT_VAULT_PATH,
+  PersistentVaultError,
+  resolveVaultPath,
+  assertSafeVaultPath,
+  loadPersistentVault,
+  savePersistentVault,
+} from './persistentVault.js';
+
 // Debug Bundle
 export { generateDebugBundle, generateCompactBundle, generateJsonBundle } from './debugBundle.js';
 

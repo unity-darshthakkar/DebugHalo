@@ -8,16 +8,24 @@
 import { sanitizeText } from '../../core/pipeline.js';
 import { discoverFiles, FileDiscoveryError } from '../utils/fileDiscovery.js';
 import { readFileSafe } from '../utils/fileReading.js';
-import { assertNotSymbolicLink, atomicWriteFile } from '../utils/atomicWrite.js';
-import { relative } from 'path';
+import { assertNotSymbolicLink, atomicWriteFile, atomicWriteOutput } from '../utils/atomicWrite.js';
+import { basename, extname, isAbsolute, relative, resolve } from 'path';
 import chalk from 'chalk';
-import type { DetectionCategory } from '../../types/core.js';
+import type { AliasVault, DetectionCategory } from '../../types/core.js';
+import { createAliasVault } from '../../core/aliasVault.js';
+import {
+  assertSafeVaultPath,
+  loadPersistentVault,
+  resolveVaultPath,
+  savePersistentVault,
+} from '../../core/persistentVault.js';
 
 export interface SanitizeFileResult {
   file: string;
   changed: boolean;
   findings: number;
   error?: string;
+  outputFile?: string;
 }
 
 export interface SanitizeSummary {
@@ -44,6 +52,10 @@ export interface SanitizeOptions {
   cwd?: string;
   minConfidence?: number;
   disabledCategories?: string[];
+  outputPath?: string;
+  outputDirectory?: string;
+  vaultPath?: string;
+  persistVault?: boolean;
 }
 
 /**
@@ -78,6 +90,56 @@ export function normalizeIgnorePatterns(input: string[]): string[] {
   return patterns;
 }
 
+function planOutputDestinations(
+  files: string[],
+  workingDir: string,
+  outputPath?: string,
+  outputDirectory?: string
+): Map<string, string | undefined> {
+  if (outputPath && files.length !== 1) {
+    throw new Error('--output requires exactly one discovered input file');
+  }
+
+  const explicitOutput = outputPath ? resolve(workingDir, outputPath) : undefined;
+  const plan = new Map<string, string | undefined>();
+  const destinations = new Map<string, string>();
+  const pathKey = (path: string): string => {
+    const resolved = resolve(path);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  };
+
+  for (const filePath of files) {
+    let destination = explicitOutput;
+    if (!destination && outputDirectory) {
+      const rel = relative(workingDir, filePath);
+      const safeRelative = rel.startsWith('..') || isAbsolute(rel) ? basename(filePath) : rel;
+      const extension = extname(safeRelative);
+      const stem = extension ? safeRelative.slice(0, -extension.length) : safeRelative;
+      destination = resolve(workingDir, outputDirectory, `${stem}.sanitized${extension}`);
+    }
+
+    if (destination) {
+      const resolvedDestination = resolve(destination);
+      if (pathKey(resolvedDestination) === pathKey(filePath)) {
+        throw new Error('Output path must not be the source file');
+      }
+      const destinationKey = pathKey(resolvedDestination);
+      const existingSource = destinations.get(destinationKey);
+      if (existingSource && pathKey(existingSource) !== pathKey(filePath)) {
+        throw new Error(
+          `Multiple input files resolve to the same output path: ${relative(workingDir, resolvedDestination)}`
+        );
+      }
+      destinations.set(destinationKey, filePath);
+      destination = resolvedDestination;
+    }
+
+    plan.set(filePath, destination);
+  }
+
+  return plan;
+}
+
 /**
  * Sanitize a single file
  */
@@ -86,7 +148,9 @@ async function sanitizeFile(
   workingDir: string,
   dryRun: boolean,
   minConfidence: number,
-  disabledCategories: string[]
+  disabledCategories: string[],
+  vault: AliasVault,
+  outputPath?: string
 ): Promise<SanitizeFileResult> {
   const relativePath = relative(workingDir, filePath);
 
@@ -114,14 +178,20 @@ async function sanitizeFile(
 
   // Run sanitization via core pipeline
   try {
-    const result = await sanitizeText(content, {
-      minConfidence,
-      disabledCategories: disabledCategories as DetectionCategory[],
-    });
+    const result = await sanitizeText(
+      content,
+      {
+        minConfidence,
+        disabledCategories: disabledCategories as DetectionCategory[],
+      },
+      vault
+    );
     const changed = result.sanitizedText !== content;
     const findings = result.detections.length;
 
-    if (changed && !dryRun) {
+    if (!dryRun && outputPath) {
+      atomicWriteOutput(outputPath, result.sanitizedText);
+    } else if (changed && !dryRun) {
       atomicWriteFile(filePath, result.sanitizedText);
     }
 
@@ -129,6 +199,7 @@ async function sanitizeFile(
       file: relativePath,
       changed,
       findings,
+      outputFile: outputPath ? relative(workingDir, outputPath) : undefined,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -151,6 +222,11 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
 
   const normalizedExtensions = normalizeExtensions(extensions);
   const normalizedIgnore = normalizeIgnorePatterns(ignorePatterns);
+  const vaultPath = options.persistVault
+    ? resolveVaultPath(options.vaultPath || undefined, workingDir)
+    : undefined;
+  if (vaultPath) assertSafeVaultPath(vaultPath, workingDir);
+  const vault = vaultPath ? loadPersistentVault(vaultPath) : createAliasVault();
 
   // Discover files
   let discoveredFiles: string[];
@@ -180,13 +256,23 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
 
   const results: SanitizeFileResult[] = [];
 
+  const outputPlan = planOutputDestinations(
+    discoveredFiles,
+    workingDir,
+    options.outputPath,
+    options.outputDirectory
+  );
+
   for (const filePath of discoveredFiles) {
+    const destination = outputPlan.get(filePath);
     const fileResult = await sanitizeFile(
       filePath,
       workingDir,
       dryRun,
       options.minConfidence ?? 0.5,
-      options.disabledCategories ?? []
+      options.disabledCategories ?? [],
+      vault,
+      destination
     );
 
     if (fileResult.error) {
@@ -207,6 +293,8 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
 
     results.push(fileResult);
   }
+
+  if (vaultPath && !dryRun) savePersistentVault(vaultPath, vault);
 
   return { summary, results };
 }

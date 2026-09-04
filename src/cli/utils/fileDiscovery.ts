@@ -26,7 +26,13 @@ export class FileDiscoveryError extends Error {
   }
 }
 
-const DEFAULT_EXCLUSIONS = ['.git/**', 'node_modules/**', 'dist/**', 'coverage/**'];
+const DEFAULT_EXCLUSIONS = [
+  '.git/**',
+  '.debughalo/**',
+  'node_modules/**',
+  'dist/**',
+  'coverage/**',
+];
 
 function normalizeExtensions(exts?: string[]): Set<string> {
   if (!exts || exts.length === 0) return new Set();
@@ -139,6 +145,9 @@ export async function discoverFiles(
 
     if (c.kind === 'directory') {
       const directoryPath = c.path;
+      if (basename(directoryPath) === '.debughalo') {
+        continue;
+      }
       const directoryIgnoreFiles = [resolve(directoryPath, '.debughaloignore')];
       if (respectGitignore) directoryIgnoreFiles.push(resolve(directoryPath, '.gitignore'));
       const directoryIgnore = buildIgnore(ignorePatterns, directoryIgnoreFiles);

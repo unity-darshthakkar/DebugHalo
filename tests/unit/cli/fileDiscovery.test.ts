@@ -120,15 +120,22 @@ describe('File Discovery', { timeout: 10000 }, () => {
     expect(result).toEqual([resolve(testDir, 'app.ts')]);
   });
 
-  it('excludes default directories (.git, node_modules, dist, coverage)', async () => {
+  it('excludes default directories, including local vault storage', async () => {
     writeFile(join(testDir, '.git'), 'config', 'git');
     writeFile(join(testDir, 'node_modules', 'pkg'), 'index.js', 'mod');
     writeFile(join(testDir, 'dist'), 'bundle.js', 'bundle');
     writeFile(join(testDir, 'coverage'), 'report.json', '{}');
+    writeFile(join(testDir, '.debughalo'), 'vault.json', 'plaintext mapping');
     writeFile(testDir, 'app.ts', 'app');
     const result = await discoverFiles([testDir], { cwd });
     expect(result).toHaveLength(1);
     expect(result).toContain(resolve(testDir, 'app.ts'));
+  });
+
+  it('does not discover files when .debughalo is passed explicitly', async () => {
+    const vaultDirectory = join(testDir, '.debughalo');
+    writeFile(vaultDirectory, 'vault.json', 'plaintext mapping');
+    expect(await discoverFiles([vaultDirectory], { cwd })).toEqual([]);
   });
 
   it('deduplicates overlapping inputs', async () => {
