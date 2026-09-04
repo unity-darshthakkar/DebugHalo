@@ -28,6 +28,23 @@ export interface FileReadResult {
   isBinary: boolean;
 }
 
+export function readBufferSafe(
+  buffer: Buffer,
+  maxInputSize: number = MAX_INPUT_SIZE
+): FileReadResult {
+  if (buffer.subarray(0, BINARY_DETECTION_SAMPLE_SIZE).includes(0)) {
+    return { content: '', error: 'Binary file skipped', isBinary: true };
+  }
+  if (buffer.length > maxInputSize) {
+    return {
+      content: '',
+      error: `File exceeds maximum size of ${maxInputSize} bytes`,
+      isBinary: false,
+    };
+  }
+  return { content: buffer.toString('utf8'), isBinary: false };
+}
+
 interface FileReadOptions {
   maxInputSize?: number;
   chunkSize?: number;

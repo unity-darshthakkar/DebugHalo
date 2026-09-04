@@ -3,7 +3,7 @@ import { mkdirSync, rmSync, existsSync, writeFileSync as writeFileSyncAlias } fr
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
-import { readFileSafe, isBinaryFile } from '@/cli/utils/fileReading.js';
+import { readBufferSafe, readFileSafe, isBinaryFile } from '@/cli/utils/fileReading.js';
 import { MAX_INPUT_SIZE } from '@/core/index.js';
 
 function createTempDir(): string {
@@ -172,6 +172,36 @@ describe('File Reading Utility', { timeout: 30000 }, () => {
   });
 
   describe('file size limit enforcement', () => {
+    it('accepts a staged buffer exactly at the byte limit', () => {
+      const buffer = Buffer.from('abcd', 'utf8');
+
+      expect(readBufferSafe(buffer, buffer.length)).toEqual({
+        content: 'abcd',
+        isBinary: false,
+      });
+    });
+
+    it('rejects a staged buffer exceeding the byte limit', () => {
+      expect(readBufferSafe(Buffer.from('abcde', 'utf8'), 4)).toEqual({
+        content: '',
+        error: 'File exceeds maximum size of 4 bytes',
+        isBinary: false,
+      });
+    });
+
+    it('uses UTF-8 byte length for staged multibyte text', () => {
+      const content = '\u20ac\u20ac';
+      const buffer = Buffer.from(content, 'utf8');
+
+      expect(content.length).toBeLessThan(4);
+      expect(buffer.length).toBeGreaterThan(4);
+      expect(readBufferSafe(buffer, 4)).toEqual({
+        content: '',
+        error: 'File exceeds maximum size of 4 bytes',
+        isBinary: false,
+      });
+    });
+
     it('reads ordinary ASCII text within the decoded-text limit', () => {
       const content = 'plain text';
       writeFile(testDir, 'under_limit.txt', content);

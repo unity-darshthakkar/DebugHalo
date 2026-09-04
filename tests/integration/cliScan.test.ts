@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
@@ -28,11 +29,11 @@ interface CliResult {
   stderr: string;
 }
 
-function runCli(args: string[]): Promise<CliResult> {
+function runCli(args: string[], cwd: string = process.cwd()): Promise<CliResult> {
   const CLI_PATH = resolve('dist/cli/index.js');
   return new Promise((resolvePromise) => {
     const child = spawn(process.execPath, [CLI_PATH, ...args], {
-      cwd: process.cwd(),
+      cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -418,5 +419,43 @@ describe('CLI Integration - Scan Command', { timeout: 30000 }, () => {
     const { stdout } = await runCli(['scan', testDir, '--no-color']);
     expect(stdout).toContain('DebugHalo Scan Results');
     expect(stdout).not.toContain('\u001b[');
+  });
+
+  it('supports staged JSON, JSONL, and SARIF output with unchanged gate semantics', async () => {
+    execFileSync('git', ['init', '--quiet'], { cwd: testDir });
+    writeFile(testDir, 'staged.ts', `const key = 'AIza${'Z9x_'.repeat(8)}Z9x';`);
+    writeFile(testDir, 'unstaged.ts', `const key = 'AIza${'A1b_'.repeat(8)}A1b';`);
+    execFileSync('git', ['add', '--', 'staged.ts'], { cwd: testDir });
+
+    const json = await runCli(['scan', '--staged', '--format', 'json'], testDir);
+    const jsonl = await runCli(['scan', '--staged', '--format', 'jsonl'], testDir);
+    const sarif = await runCli(['scan', '--staged', '--format', 'sarif'], testDir);
+    const gated = await runCli(['scan', '--staged', '--quiet', '--fail-on-findings'], testDir);
+
+    expect(
+      JSON.parse(json.stdout).findings.map((finding: { file: string }) => finding.file)
+    ).toEqual(['staged.ts']);
+    expect(
+      jsonl.stdout
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line).type)
+    ).toEqual(['finding', 'summary']);
+    expect(JSON.parse(sarif.stdout).runs[0].results).toHaveLength(1);
+    expect(gated).toMatchObject({ exitCode: 1, stdout: '' });
+  });
+
+  it('exposes idempotent hook install, status, and uninstall commands', async () => {
+    execFileSync('git', ['init', '--quiet'], { cwd: testDir });
+    const installed = await runCli(['hook', 'install'], testDir);
+    const repeated = await runCli(['hook', 'install'], testDir);
+    const status = await runCli(['hook', 'status'], testDir);
+    const removed = await runCli(['hook', 'uninstall'], testDir);
+    const removedAgain = await runCli(['hook', 'uninstall'], testDir);
+    expect(installed.stdout).toContain('hook installed');
+    expect(repeated.exitCode).toBe(0);
+    expect(status.stdout).toContain('hook is active');
+    expect(removed.stdout).toContain('not installed');
+    expect(removedAgain.exitCode).toBe(0);
   });
 });
