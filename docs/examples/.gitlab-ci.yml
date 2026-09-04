@@ -1,0 +1,13 @@
+# Setup once in the consuming repository:
+#   npm install --save-dev --save-exact debug-halo
+# Commit both package.json and package-lock.json. npm ci then installs that exact locked version.
+
+debughalo:
+  image: node:24
+  script:
+    - npm ci # Installs the consuming project and its pinned DebugHalo devDependency.
+    - npx debug-halo scan . --format json --output debughalo.json --fail-on-findings
+  artifacts:
+    when: always
+    paths:
+      - debughalo.json

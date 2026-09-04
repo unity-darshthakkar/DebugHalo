@@ -112,8 +112,11 @@ debug-halo scan [paths...] [options]
 | ---------------------------- | ----------------------------------------- | --------------------------------- |
 | `-e, --ext <extensions...>`  | File extensions to scan (space-separated) | All supported extensions          |
 | `-i, --ignore <patterns...>` | Glob patterns to ignore (space-separated) | None (uses .gitignore + defaults) |
-| `-o, --output <format>`      | Output format: `text` or `json`           | `text`                            |
+| `-f, --format <format>`      | `text`, `json`, `jsonl`, or `sarif`       | `text`                            |
+| `-o, --output <path>`        | Write machine output to a file            | Standard output                   |
 | `--fail-on-findings`         | Exit with code 1 if any findings detected | `false`                           |
+| `-q, --quiet`                | Suppress nonessential text output         | `false`                           |
+| `--no-color`                 | Disable ANSI color output                 | `false`                           |
 | `-c, --config <path>`        | Path to config file                       | Auto-discovered `.debughalo.json` |
 | `-v, --verbose`              | Enable verbose output                     | `false`                           |
 
@@ -130,7 +133,13 @@ debug-halo scan [paths...] [options]
 debug-halo scan
 
 # Scan specific paths with JSON output
+debug-halo scan src/ tests/ --format json
+
+# Legacy JSON format selection remains supported
 debug-halo scan src/ tests/ --output json
+
+# Write SARIF without mixing human text into the file
+debug-halo scan . --format sarif --output debughalo.sarif
 
 # Only scan TypeScript and JavaScript files
 debug-halo scan --ext ts js
@@ -272,17 +281,17 @@ DebugHalo uses a `.debughalo.json` file in your project root (or a custom path v
 
 ### Config Fields
 
-| Field                | Type               | Default                                             | Description                           |
-| -------------------- | ------------------ | --------------------------------------------------- | ------------------------------------- |
-| `extensions`         | `string[]`         | `["ts","tsx","js","jsx","json","yaml","yml","env"]` | File extensions to process            |
-| `ignorePatterns`     | `string[]`         | `["node_modules/**","dist/**",".git/**"]`           | Glob patterns to ignore               |
-| `outputFormat`       | `"text" \| "json"` | `"text"`                                            | Default output format for `scan`      |
-| `failOnFindings`     | `boolean`          | `false`                                             | Default for `scan --fail-on-findings` |
-| `dryRun`             | `boolean`          | `false`                                             | Default dry-run mode for `sanitize`   |
-| `minConfidence`      | `number`           | `0.5`                                               | Minimum accepted confidence (`0`–`1`) |
-| `disabledCategories` | `string[]`         | `[]`                                                | Categories to suppress                |
-| `vaultPath`          | `string`           | user-local `~/.debughalo/vault.json`                | Local plaintext alias vault path      |
-| `outputDirectory`    | `string`           | `"debughalo-output"`                                | Default `share` output directory      |
+| Field                | Type                                     | Default                                             | Description                           |
+| -------------------- | ---------------------------------------- | --------------------------------------------------- | ------------------------------------- |
+| `extensions`         | `string[]`                               | `["ts","tsx","js","jsx","json","yaml","yml","env"]` | File extensions to process            |
+| `ignorePatterns`     | `string[]`                               | `["node_modules/**","dist/**",".git/**"]`           | Glob patterns to ignore               |
+| `outputFormat`       | `"text" \| "json" \| "jsonl" \| "sarif"` | `"text"`                                            | Default output format for `scan`      |
+| `failOnFindings`     | `boolean`                                | `false`                                             | Default for `scan --fail-on-findings` |
+| `dryRun`             | `boolean`                                | `false`                                             | Default dry-run mode for `sanitize`   |
+| `minConfidence`      | `number`                                 | `0.5`                                               | Minimum accepted confidence (`0`–`1`) |
+| `disabledCategories` | `string[]`                               | `[]`                                                | Categories to suppress                |
+| `vaultPath`          | `string`                                 | user-local `~/.debughalo/vault.json`                | Local plaintext alias vault path      |
+| `outputDirectory`    | `string`                                 | `"debughalo-output"`                                | Default `share` output directory      |
 
 > **Note**: `debug-halo init` omits `dryRun` from the generated file, so sanitization writes by default. You can add `"dryRun": true` to configuration or pass `--dry-run` on the command line.
 
@@ -393,7 +402,7 @@ DebugHalo detects various secret types and PII categories:
 
 ## 🛡️ Safety Features
 
-- **No raw secrets in output**: Both text and JSON output redact secret values (showing only previews like `sk***78`)
+- **No raw secrets in output**: Text output never prints values; machine formats omit previews, source context, and raw offsets
 - **Binary file skipping**: Files containing NUL bytes are automatically skipped
 - **Bounded text input**: UTF-8 text is supported up to the core 10 MiB input limit; oversized inputs fail without an unbounded whole-file read
 - **`.gitignore` respected**: Patterns from local `.gitignore` are automatically applied
@@ -404,6 +413,25 @@ DebugHalo detects various secret types and PII categories:
 - **Symlink refusal**: Sanitize refuses symbolic-link targets instead of replacing them or writing through them
 
 These safeguards reduce common write and input-handling risks, but they do not guarantee recovery from every operating-system, hardware, or filesystem failure. Use version control or another backup strategy before sanitizing important files.
+
+## Structured scan output
+
+`--format json` emits one object with `schemaVersion`, `summary`, `findings`, and `errors`.
+Every finding contains only `file`, `category`, `detector`, `severity`, `confidence`, available
+`line`/`column`, `reason`, and `likelyTestValue` fields.
+
+`--format jsonl` emits one compact JSON object per line in deterministic order: zero or more
+`finding` records, zero or more `error` records, and exactly one final `summary` record. Each record
+has a `type` field; the summary also includes `schemaVersion`.
+
+`--format sarif` emits SARIF 2.1.0. Stable rule IDs use `debughalo/<category>`. Severity maps as
+follows: `critical` and `high` to `error`, `medium` to `warning`, and `low` to `note`. SARIF includes
+file and available line/column locations but never snippets or secret-bearing context.
+
+Machine formats never contain ANSI codes or original secret values. Add `--output <path>` with a
+machine format to write through DebugHalo's protected output-file writer; stdout remains empty on
+success. Without `--output`, the document is written to stdout. `--quiet` suppresses text results
+but not errors or machine output, while `--no-color` guarantees plain text output.
 
 ## 📊 Exit Codes
 
@@ -419,17 +447,37 @@ Any per-file processing failure produces exit code `2`, even when other files we
 
 ## 🧪 CI/CD Integration
 
-```yaml
-# GitHub Actions example (run from built project)
-- name: DebugHalo Scan
-  run: node dist/cli/index.js scan --fail-on-findings --output json
+Add DebugHalo to the consuming project as an exact development dependency and commit the updated
+manifest and lockfile. This makes `npm ci` install a predictable DebugHalo version in CI:
+
+```bash
+npm install --save-dev --save-exact debug-halo
+git add package.json package-lock.json
 ```
 
-Use `--output json` for machine-parsable results and `--fail-on-findings` to fail the build on detections.
+```yaml
+# Basic GitHub Actions gate after checkout/setup; npm ci installs the locked DebugHalo devDependency
+- name: Install project dependencies, including DebugHalo
+  run: npm ci
+- name: DebugHalo Scan
+  run: npx debug-halo scan . --fail-on-findings
+```
+
+For GitHub Code Scanning, generate `debughalo.sarif` and upload it with
+`github/codeql-action/upload-sarif`. See the complete
+[GitHub Actions example](./docs/examples/github-actions.yml). A basic gate plus JSON artifact is
+also provided for [GitLab CI](./docs/examples/.gitlab-ci.yml).
+
+Both complete examples assume the one-time dev-dependency setup above; they do not rely on an
+undeclared global package or an implicit network install by `npx`.
+
+`--fail-on-findings` preserves the standard exit model: `0` for a successful scan without an
+actionable gate result, `1` when findings are present and gating is enabled, and `2` for usage,
+configuration, discovery, or processing failures. A SARIF-producing gate may exit `1`; the example
+runs the upload step even when the scan reports findings.
 
 ## 🚫 Current Limitations
 
-- **No SARIF output** — JSON and text only
 - **No persistent backup** — Sanitize atomically replaces files but does not retain backup copies; use version control
 - **Plaintext local vault** — Reversible mappings are local and deliberately not encrypted
 - **UTF-8 text only** — Arbitrary text encodings are not supported

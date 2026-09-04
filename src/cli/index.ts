@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
-import { runScan, outputText, outputJson } from './commands/scan.js';
+import { runScan, outputText } from './commands/scan.js';
 import { runSanitize, outputText as outputSanitizeText } from './commands/sanitize.js';
 import { runRestore, outputRestoreText } from './commands/restore.js';
 import { runShare, outputShareText } from './commands/share.js';
@@ -24,6 +24,9 @@ import {
 } from './configLoader.js';
 import { createDefaultConfigFile } from './config.js';
 import { sanitizeExitCode, scanExitCode } from './exitCodes.js';
+import { atomicWriteOutput } from './utils/atomicWrite.js';
+import { formatJson, formatJsonl, formatSarif } from './formatters/index.js';
+import { VALID_OUTPUT_FORMATS } from './config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -43,10 +46,13 @@ program
   .description('Pre-deployment PII/secret detox pipeline')
   .version(version)
   .option('-v, --verbose', 'Enable verbose output')
+  .option('-q, --quiet', 'Suppress nonessential human-readable output')
+  .option('--no-color', 'Disable ANSI color output')
   .option('-c, --config <path>', 'Path to config file')
   .hook('preAction', (thisCommand) => {
     const opts = thisCommand.opts();
-    if (opts['verbose']) {
+    if (opts['color'] === false) chalk.level = 0;
+    if (opts['verbose'] && !opts['quiet']) {
       console.error(chalk.dim('[DEBUG] Verbose mode enabled'));
     }
   });
@@ -117,14 +123,14 @@ function isOptionProvided(command: Command, optionName: string): boolean {
 function getExplicitCliOptions(scanCommand: Command): {
   extensions?: string[];
   ignorePatterns?: string[];
-  outputFormat?: 'text' | 'json';
+  outputFormat?: 'text' | 'json' | 'jsonl' | 'sarif';
   failOnFindings?: boolean;
 } {
   const opts = scanCommand.opts();
   const result: {
     extensions?: string[];
     ignorePatterns?: string[];
-    outputFormat?: 'text' | 'json';
+    outputFormat?: 'text' | 'json' | 'jsonl' | 'sarif';
     failOnFindings?: boolean;
   } = {};
 
@@ -134,7 +140,12 @@ function getExplicitCliOptions(scanCommand: Command): {
   if (isOptionProvided(scanCommand, 'ignore')) {
     result.ignorePatterns = opts['ignore'];
   }
-  if (isOptionProvided(scanCommand, 'output')) {
+  if (isOptionProvided(scanCommand, 'format')) {
+    result.outputFormat = opts['format'];
+  } else if (
+    isOptionProvided(scanCommand, 'output') &&
+    VALID_OUTPUT_FORMATS.includes(opts['output'])
+  ) {
     result.outputFormat = opts['output'];
   }
   if (isOptionProvided(scanCommand, 'failOnFindings')) {
@@ -173,11 +184,13 @@ program
   .argument('[paths...]', 'Files or directories to scan', ['.'])
   .option('-e, --ext <extensions...>', 'File extensions to scan (comma-separated)', [])
   .option('-i, --ignore <patterns...>', 'Glob patterns to ignore (comma-separated)', [])
-  .option('-o, --output <format>', 'Output format: json, text', undefined)
+  .option('-f, --format <format>', 'Output format: text, json, jsonl, sarif')
+  .option('-o, --output <path-or-format>', 'Output file, or legacy text/json format selector')
   .option('--fail-on-findings', 'Exit with non-zero code if findings detected')
   .action(async (paths, _options, scanCommand) => {
     const globalOpts = program.opts();
     const verbose = globalOpts['verbose'] ?? false;
+    const quiet = globalOpts['quiet'] ?? false;
     const cwd = process.cwd();
 
     // Load config
@@ -198,9 +211,11 @@ program
     });
 
     // Validate output format
-    if (mergedConfig.outputFormat !== 'text' && mergedConfig.outputFormat !== 'json') {
+    if (!VALID_OUTPUT_FORMATS.includes(mergedConfig.outputFormat)) {
       console.error(
-        chalk.red(`Error: Invalid output format: ${mergedConfig.outputFormat}. Allowed: text, json`)
+        chalk.red(
+          `Error: Invalid output format: ${mergedConfig.outputFormat}. Allowed: ${VALID_OUTPUT_FORMATS.join(', ')}`
+        )
       );
       process.exitCode = 2;
       return;
@@ -219,9 +234,24 @@ program
         disabledCategories: mergedConfig.disabledCategories,
       });
 
-      if (mergedConfig.outputFormat === 'json') {
-        outputJson(result);
-      } else {
+      const rawOutput = scanCommand.opts()['output'] as string | undefined;
+      const outputPath =
+        rawOutput &&
+        (isOptionProvided(scanCommand, 'format') ||
+          !VALID_OUTPUT_FORMATS.includes(rawOutput as never))
+          ? rawOutput
+          : undefined;
+      let rendered: string | undefined;
+      if (mergedConfig.outputFormat === 'json') rendered = formatJson(result);
+      if (mergedConfig.outputFormat === 'jsonl') rendered = formatJsonl(result);
+      if (mergedConfig.outputFormat === 'sarif') rendered = formatSarif(result, version);
+
+      if (outputPath) {
+        if (!rendered) throw new Error('--output file requires --format json, jsonl, or sarif');
+        atomicWriteOutput(resolve(cwd, outputPath), rendered);
+      } else if (rendered) {
+        process.stdout.write(rendered);
+      } else if (!quiet) {
         outputText(result, verbose);
       }
       reportFileErrors(result.errors, verbose);
@@ -234,7 +264,7 @@ program
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // Only print to stderr in text mode (json should have stdout only)
-      if (mergedConfig.outputFormat !== 'json') {
+      if (mergedConfig.outputFormat === 'text') {
         console.error(chalk.red('Error:'), message);
       } else {
         // For json mode, write error object to stderr
@@ -295,7 +325,9 @@ program
         ),
       });
 
-      outputSanitizeText(result, mergedConfig.dryRun, verbose);
+      if (!(globalOpts['quiet'] ?? false)) {
+        outputSanitizeText(result, mergedConfig.dryRun, verbose);
+      }
       reportFileErrors(
         result.results.flatMap((fileResult) =>
           fileResult.error ? [{ file: fileResult.file, message: fileResult.error }] : []
@@ -329,7 +361,9 @@ program
         dryRun: options.dryRun ?? false,
         vaultPath: options.vault ?? configResult.config.vaultPath,
       });
-      outputRestoreText(result, options.dryRun ?? false);
+      if (!(program.opts()['quiet'] ?? false)) {
+        outputRestoreText(result, options.dryRun ?? false);
+      }
       reportFileErrors(result.errors, program.opts()['verbose'] ?? false);
       process.exitCode = result.filesFailed > 0 ? 2 : result.filesChanged > 0 ? 1 : 0;
     } catch (error) {
@@ -362,7 +396,7 @@ program
         disabledCategories: config.disabledCategories,
         verbose: program.opts()['verbose'] ?? false,
       });
-      outputShareText(result);
+      if (!(program.opts()['quiet'] ?? false)) outputShareText(result);
       reportFileErrors(
         result.sanitization.results.flatMap((item) =>
           item.error ? [{ file: item.file, message: item.error }] : []
@@ -394,8 +428,10 @@ program
     try {
       const defaultConfig = createDefaultConfigFile();
       writeFileSync(configPath, defaultConfig, 'utf-8');
-      console.log(chalk.green('✓'), `Created config file: ${configPath}`);
-      console.log(chalk.dim('Edit this file to customize your DebugHalo settings.'));
+      if (!(program.opts()['quiet'] ?? false)) {
+        console.log(chalk.green('✓'), `Created config file: ${configPath}`);
+        console.log(chalk.dim('Edit this file to customize your DebugHalo settings.'));
+      }
     } catch (err) {
       console.error(chalk.red('Error:'), err instanceof Error ? err.message : String(err));
       process.exitCode = 2;
@@ -406,8 +442,10 @@ program
   .command('version')
   .description('Show version information')
   .action(() => {
-    console.log(chalk.blue(`DebugHalo v${version}`));
-    console.log(chalk.dim('Pre-deployment PII/secret detox pipeline'));
+    if (!(program.opts()['quiet'] ?? false)) {
+      console.log(chalk.blue(`DebugHalo v${version}`));
+      console.log(chalk.dim('Pre-deployment PII/secret detox pipeline'));
+    }
   });
 
 program.parseAsync(process.argv).catch((error) => {
