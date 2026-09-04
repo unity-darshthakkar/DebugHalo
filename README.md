@@ -160,6 +160,9 @@ debug-halo sanitize [paths...] [options]
 | `-e, --ext <extensions...>`  | File extensions to sanitize (space-separated) | All supported extensions          |
 | `-i, --ignore <patterns...>` | Glob patterns to ignore (space-separated)     | None (uses .gitignore + defaults) |
 | `--dry-run`                  | Preview changes without writing files         | `false`                           |
+| `-o, --output <path>`        | Write one sanitized copy; keep source intact  | None                              |
+| `--output-dir <path>`        | Write sanitized copies beneath a directory    | None                              |
+| `--vault <path>`             | Plaintext local alias vault path              | `~/.debughalo/vault.json`         |
 | `-c, --config <path>`        | Path to config file                           | Auto-discovered `.debughalo.json` |
 | `-v, --verbose`              | Enable verbose output                         | `false`                           |
 
@@ -183,7 +186,43 @@ debug-halo sanitize --ext ts js --dry-run
 
 # Ignore specific paths
 debug-halo sanitize --ignore "**/generated/**"
+
+# Create a reversible copy without changing the source
+debug-halo sanitize error.log --output error.sanitized.log
 ```
+
+Copy output enables vault persistence automatically. Multiple inputs require `--output-dir`; a
+single `--output` is rejected when discovery produces more than one file. Output paths may not be
+the source path.
+
+### `debug-halo restore`
+
+Restore aliases known to the local vault. Unknown aliases remain unchanged and are counted.
+
+```bash
+debug-halo restore debughalo-output/error.sanitized.log
+debug-halo restore debughalo-output --dry-run
+debug-halo restore copy.log --vault .debughalo/vault.json
+```
+
+Restore uses the same protected replacement writes as in-place sanitization. Exit code `1` means
+files were restored (or would be restored during dry-run), `0` means no changes, and `2` means a
+processing failure. Original values are never printed.
+
+### `debug-halo share`
+
+Create local sanitized copies, persist their mappings, and rescan the copies before reporting them
+ready to share. This command never uploads, transmits, or sends files.
+
+```bash
+debug-halo share error.log
+# Produces debughalo-output/error.sanitized.log
+
+debug-halo restore debughalo-output/error.sanitized.log
+```
+
+The original files remain unchanged. `share` exits with code `2` and does not claim success if file
+processing fails or the validation scan finds active findings.
 
 ### `debug-halo init`
 
@@ -226,7 +265,8 @@ DebugHalo uses a `.debughalo.json` file in your project root (or a custom path v
   "failOnFindings": false,
   "dryRun": false,
   "minConfidence": 0.5,
-  "disabledCategories": []
+  "disabledCategories": [],
+  "outputDirectory": "debughalo-output"
 }
 ```
 
@@ -241,6 +281,8 @@ DebugHalo uses a `.debughalo.json` file in your project root (or a custom path v
 | `dryRun`             | `boolean`          | `false`                                             | Default dry-run mode for `sanitize`   |
 | `minConfidence`      | `number`           | `0.5`                                               | Minimum accepted confidence (`0`–`1`) |
 | `disabledCategories` | `string[]`         | `[]`                                                | Categories to suppress                |
+| `vaultPath`          | `string`           | user-local `~/.debughalo/vault.json`                | Local plaintext alias vault path      |
+| `outputDirectory`    | `string`           | `"debughalo-output"`                                | Default `share` output directory      |
 
 > **Note**: `debug-halo init` omits `dryRun` from the generated file, so sanitization writes by default. You can add `"dryRun": true` to configuration or pass `--dry-run` on the command line.
 
@@ -265,9 +307,20 @@ Options are resolved in this order (highest priority last):
   "failOnFindings": true,
   "dryRun": true,
   "minConfidence": 0.85,
-  "disabledCategories": ["email", "ip_address"]
+  "disabledCategories": ["email", "ip_address"],
+  "vaultPath": ".debughalo/vault.json",
+  "outputDirectory": "debughalo-output"
 }
 ```
+
+### Reversible sanitization and vault safety
+
+The vault is an auditable JSON document containing only alias mappings and their category/count
+metadata. It is local persistence, **not encryption and not a secrets manager**: anyone who can
+read the vault can read the original values. The default is `~/.debughalo/vault.json`, outside the
+project. A configured project-local vault is accepted only beneath `.debughalo/`, which DebugHalo
+always excludes from discovery. Keep that directory out of source control and protect it with
+normal operating-system file permissions. Vault parsing errors never include stored secret values.
 
 ### False-positive controls
 
@@ -378,7 +431,7 @@ Use `--output json` for machine-parsable results and `--fail-on-findings` to fai
 
 - **No SARIF output** — JSON and text only
 - **No persistent backup** — Sanitize atomically replaces files but does not retain backup copies; use version control
-- **No vault persistence** — Sanitization mappings are not stored across runs
+- **Plaintext local vault** — Reversible mappings are local and deliberately not encrypted
 - **UTF-8 text only** — Arbitrary text encodings are not supported
 - **No YAML config** — Only `.debughalo.json` supported
 - **No Chrome extension** — CLI only

@@ -14,6 +14,8 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 import { runScan, outputText, outputJson } from './commands/scan.js';
 import { runSanitize, outputText as outputSanitizeText } from './commands/sanitize.js';
+import { runRestore, outputRestoreText } from './commands/restore.js';
+import { runShare, outputShareText } from './commands/share.js';
 import {
   loadConfig,
   applyCliOptions,
@@ -249,6 +251,9 @@ program
   .option('-e, --ext <extensions...>', 'File extensions to sanitize', [])
   .option('-i, --ignore <patterns...>', 'Glob patterns to ignore', [])
   .option('--dry-run', 'Show what would be changed without writing')
+  .option('-o, --output <path>', 'Write a single sanitized copy instead of changing the source')
+  .option('--output-dir <path>', 'Write sanitized copies beneath this directory')
+  .option('--vault <path>', 'Path to the local plaintext alias vault')
   .action(async (paths, _options, sanitizeCommand) => {
     const globalOpts = program.opts();
     const verbose = globalOpts['verbose'] ?? false;
@@ -280,6 +285,14 @@ program
         cwd,
         minConfidence: mergedConfig.minConfidence,
         disabledCategories: mergedConfig.disabledCategories,
+        outputPath: sanitizeCommand.opts()['output'],
+        outputDirectory: sanitizeCommand.opts()['outputDir'],
+        vaultPath: sanitizeCommand.opts()['vault'] ?? mergedConfig.vaultPath,
+        persistVault: Boolean(
+          sanitizeCommand.opts()['vault'] ||
+          sanitizeCommand.opts()['output'] ||
+          sanitizeCommand.opts()['outputDir']
+        ),
       });
 
       outputSanitizeText(result, mergedConfig.dryRun, verbose);
@@ -296,6 +309,69 @@ program
       const message = err instanceof Error ? err.message : String(err);
       console.error(chalk.red('Error:'), message);
       process.exitCode = 2;
+    }
+  });
+
+program
+  .command('restore')
+  .description('Restore known aliases from a local vault')
+  .argument('<paths...>', 'Sanitized files or directories to restore')
+  .option('--dry-run', 'Show what would be restored without writing')
+  .option('--vault <path>', 'Path to the local plaintext alias vault')
+  .action(async (paths, options) => {
+    const cwd = process.cwd();
+    const configResult = loadConfigForCommand(program.opts()['config'], cwd);
+    if (!configResult) return;
+    try {
+      const result = await runRestore({
+        paths,
+        cwd,
+        dryRun: options.dryRun ?? false,
+        vaultPath: options.vault ?? configResult.config.vaultPath,
+      });
+      outputRestoreText(result, options.dryRun ?? false);
+      reportFileErrors(result.errors, program.opts()['verbose'] ?? false);
+      process.exitCode = result.filesFailed > 0 ? 2 : result.filesChanged > 0 ? 1 : 0;
+    } catch (error) {
+      reportFatalError(error);
+    }
+  });
+
+program
+  .command('share')
+  .description('Create validated local sanitized copies for safe sharing')
+  .argument('<paths...>', 'Files or directories to prepare')
+  .option('-e, --ext <extensions...>', 'File extensions to process', [])
+  .option('-i, --ignore <patterns...>', 'Glob patterns to ignore', [])
+  .option('-o, --output-dir <path>', 'Directory for sanitized copies')
+  .option('--vault <path>', 'Path to the local plaintext alias vault')
+  .action(async (paths, options) => {
+    const cwd = process.cwd();
+    const configResult = loadConfigForCommand(program.opts()['config'], cwd);
+    if (!configResult) return;
+    const config = configResult.config;
+    try {
+      const result = await runShare({
+        paths,
+        cwd,
+        extensions: options.ext?.length ? options.ext : [],
+        ignorePatterns: options.ignore?.length ? options.ignore : config.ignorePatterns,
+        outputDirectory: options.outputDir ?? config.outputDirectory,
+        vaultPath: options.vault ?? config.vaultPath,
+        minConfidence: config.minConfidence,
+        disabledCategories: config.disabledCategories,
+        verbose: program.opts()['verbose'] ?? false,
+      });
+      outputShareText(result);
+      reportFileErrors(
+        result.sanitization.results.flatMap((item) =>
+          item.error ? [{ file: item.file, message: item.error }] : []
+        ),
+        program.opts()['verbose'] ?? false
+      );
+      process.exitCode = result.safe ? 0 : 2;
+    } catch (error) {
+      reportFatalError(error);
     }
   });
 

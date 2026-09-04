@@ -99,11 +99,14 @@ export function getOrCreateAlias(
   }
 
   // Create new alias
-  const counter = (vault.counters.get(category) ?? 0) + 1;
-  vault.counters.set(category, counter);
-
   const prefix = CATEGORY_PREFIX[category] ?? 'SECRET';
-  const alias = `<${prefix}_${counter}>`;
+  let counter = (vault.counters.get(category) ?? 0) + 1;
+  let alias = `<${prefix}_${counter}>`;
+  while (vault.reverseMap.has(alias)) {
+    counter += 1;
+    alias = `<${prefix}_${counter}>`;
+  }
+  vault.counters.set(category, counter);
 
   // Generate a deterministic ID based on first occurrence
   // We use the current vault size as a unique identifier
