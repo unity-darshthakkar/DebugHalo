@@ -145,7 +145,7 @@ export function applyCliOptions(
   cliOptions: {
     extensions?: string[];
     ignorePatterns?: string[];
-    outputFormat?: 'text' | 'json';
+    outputFormat?: 'text' | 'json' | 'jsonl' | 'sarif';
     failOnFindings?: boolean;
     dryRun?: boolean;
     minConfidence?: number;

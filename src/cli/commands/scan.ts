@@ -44,7 +44,7 @@ export interface ScanOptions {
   paths: string[];
   extensions: string[];
   ignorePatterns: string[];
-  outputFormat: 'text' | 'json' | 'sarif';
+  outputFormat: 'text' | 'json' | 'jsonl' | 'sarif';
   failOnFindings: boolean;
   verbose: boolean;
   cwd?: string;
@@ -142,8 +142,10 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
   const workingDir = cwd ?? process.cwd();
 
   // Validate output format
-  if (options.outputFormat !== 'text' && options.outputFormat !== 'json') {
-    throw new Error(`Invalid output format: ${options.outputFormat}. Allowed: text, json`);
+  if (!['text', 'json', 'jsonl', 'sarif'].includes(options.outputFormat)) {
+    throw new Error(
+      `Invalid output format: ${options.outputFormat}. Allowed: text, json, jsonl, sarif`
+    );
   }
 
   const normalizedExtensions = normalizeExtensions(extensions);

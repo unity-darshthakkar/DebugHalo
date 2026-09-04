@@ -384,20 +384,19 @@ describe('Scan Command', { timeout: 30000 }, () => {
       expect(result.summary.filesScanned).toBeGreaterThanOrEqual(1);
     });
 
-    it('throws error for sarif output format', async () => {
+    it('accepts sarif output format', async () => {
       writeFile(testDir, 'test.ts', 'const x = 1;');
 
-      // runScan should throw for invalid output format
       await expect(
         runScan({
           paths: [testDir],
           extensions: ['ts'],
           ignorePatterns: [],
-          outputFormat: 'sarif' as any, // Force invalid format
+          outputFormat: 'sarif',
           failOnFindings: false,
           verbose: false,
         })
-      ).rejects.toThrow('Invalid output format: sarif. Allowed: text, json');
+      ).resolves.toMatchObject({ summary: { findings: 0 } });
     });
 
     it('handles missing path discovery error', async () => {

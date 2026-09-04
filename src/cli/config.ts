@@ -11,7 +11,7 @@ export interface DebugHaloConfig {
   /** Glob patterns to ignore */
   ignorePatterns?: string[];
   /** Output format for scan command: 'text' | 'json' */
-  outputFormat?: 'text' | 'json';
+  outputFormat?: 'text' | 'json' | 'jsonl' | 'sarif';
   /** Fail with exit code 1 if findings detected (scan command) */
   failOnFindings?: boolean;
   /** Whether to run in dry-run mode (sanitize command) */
@@ -29,7 +29,7 @@ export interface DebugHaloConfig {
 /**
  * Valid output format values
  */
-export const VALID_OUTPUT_FORMATS = ['text', 'json'] as const;
+export const VALID_OUTPUT_FORMATS = ['text', 'json', 'jsonl', 'sarif'] as const;
 
 /**
  * Default configuration values
@@ -92,10 +92,10 @@ export function validateConfig(config: unknown): DebugHaloConfig {
     if (typeof outputFormat !== 'string') {
       throw new Error('Config "outputFormat" must be a string');
     }
-    if (!VALID_OUTPUT_FORMATS.includes(outputFormat as 'text' | 'json')) {
+    if (!VALID_OUTPUT_FORMATS.includes(outputFormat as (typeof VALID_OUTPUT_FORMATS)[number])) {
       throw new Error(`Config "outputFormat" must be one of: ${VALID_OUTPUT_FORMATS.join(', ')}`);
     }
-    validated.outputFormat = outputFormat as 'text' | 'json';
+    validated.outputFormat = outputFormat as (typeof VALID_OUTPUT_FORMATS)[number];
   }
 
   // Validate failOnFindings

@@ -64,8 +64,8 @@ describe('CLI Config Module', () => {
     });
 
     it('rejects invalid outputFormat', () => {
-      expect(() => validateConfig({ outputFormat: 'sarif' })).toThrow(
-        'Config "outputFormat" must be one of: text, json'
+      expect(() => validateConfig({ outputFormat: 'xml' })).toThrow(
+        'Config "outputFormat" must be one of: text, json, jsonl, sarif'
       );
     });
 
@@ -188,8 +188,8 @@ describe('CLI Config Module', () => {
   });
 
   describe('VALID_OUTPUT_FORMATS', () => {
-    it('contains text and json', () => {
-      expect(VALID_OUTPUT_FORMATS).toEqual(['text', 'json']);
+    it('contains every supported scan format', () => {
+      expect(VALID_OUTPUT_FORMATS).toEqual(['text', 'json', 'jsonl', 'sarif']);
     });
   });
 });
