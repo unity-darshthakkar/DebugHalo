@@ -134,7 +134,7 @@ export {
 } from './pipeline.js';
 
 // Core version
-export const CORE_VERSION = '0.2.0';
+export const CORE_VERSION = '1.0.0';
 
 /**
  * Quick start function for simple sanitization

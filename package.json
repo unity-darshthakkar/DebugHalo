@@ -1,6 +1,6 @@
 {
   "name": "debug-halo",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Pre-deployment PII/secret detox pipeline – strip secrets before they ship",
   "descriptionShort": "Pre-deployment PII/secret detox pipeline",
   "type": "module",
@@ -39,7 +39,8 @@
     "start": "node dist/cli/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20.0.0"
@@ -83,8 +84,7 @@
   },
   "homepage": "https://github.com/unity-darshthakkar/DebugHalo#readme",
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

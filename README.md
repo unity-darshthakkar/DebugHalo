@@ -571,8 +571,7 @@ The package supports Node.js 20 or newer on 64-bit and ARM64 Windows, macOS, and
 
 ## 📚 Documentation
 
-- [Architecture Overview](./docs/ARCHITECTURE.md) — planned
-- [API Reference](./docs/API.md) — planned
+- [Changelog](./CHANGELOG.md)
 - [Contributing Guide](./CONTRIBUTING.md)
 - [Security Policy](./SECURITY.md)
 

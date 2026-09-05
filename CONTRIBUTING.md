@@ -6,13 +6,13 @@ Thank you for considering contributing to DebugHalo! We appreciate your help in 
 
 ### Reporting Issues
 
-- Use the [GitHub Issues](https://github.com/Darsh/DebugHalo/issues) tracker
+- Use the [GitHub Issues](https://github.com/unity-darshthakkar/DebugHalo/issues) tracker
 - Please check if the issue has already been reported
 - Include as much detail as possible: steps to reproduce, expected vs actual behavior, environment details
 
 ### Suggesting Features
 
-- Use the [GitHub Issues](https://github.com/Darsh/DebugHalo/issues) tracker
+- Use the [GitHub Issues](https://github.com/unity-darshthakkar/DebugHalo/issues) tracker
 - Clearly describe the feature and why it would be useful
 - Consider if it aligns with the project's local-first, privacy-focused goals
 
@@ -43,7 +43,7 @@ Please follow these steps to contribute:
    ```bash
    git push origin feature/amazing-feature
    ```
-9. **Open a Pull Request** against the `main` branch
+9. **Open a Pull Request** against the `master` branch
 
 ## 🔧 Development Setup
 
@@ -53,22 +53,21 @@ Please follow these steps to contribute:
    npm install
    ```
 3. Familiarize yourself with the project structure:
+
    ```
    src/
-   ├── core/         # Core logic (Phase 2+)
-   ├── detectors/    # PII/secret detectors (Phase 2+)
-   ├── masking/      # Data masking utilities (Phase 2+)
-   ├── bundle/       # Bundle creation (Phase 2+)
-   ├── cli/          # Command-line interface
+   ├── core/         # Core detection, sanitization, restoration, and vault logic
+   │   └── detectors/ # Secret and PII detectors
+   ├── cli/          # Command-line interface and filesystem integrations
    ├── types/        # TypeScript type definitions
-   └── utils/        # Utility functions
+   └── utils/        # Shared utilities
    ```
 
-````
 4. Run tests to ensure everything works:
+
    ```bash
    npm run test
-````
+   ```
 
 ## 📝 Coding Standards
 
@@ -146,8 +145,8 @@ npm run check
 # Create production build
 npm run build
 
-# Preview build (if applicable)
-npm run preview
+# Validate the packed npm installation
+npm run test:package
 ```
 
 ## 🎯 First Contributions
