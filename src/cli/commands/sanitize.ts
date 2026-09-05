@@ -150,7 +150,8 @@ async function sanitizeFile(
   minConfidence: number,
   disabledCategories: string[],
   vault: AliasVault,
-  outputPath?: string
+  outputPath?: string,
+  beforeWrite?: () => void
 ): Promise<SanitizeFileResult> {
   const relativePath = relative(workingDir, filePath);
 
@@ -189,6 +190,7 @@ async function sanitizeFile(
     const changed = result.sanitizedText !== content;
     const findings = result.detections.length;
 
+    if (changed && !dryRun) beforeWrite?.();
     if (!dryRun && outputPath) {
       atomicWriteOutput(outputPath, result.sanitizedText);
     } else if (changed && !dryRun) {
@@ -263,6 +265,9 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
     options.outputDirectory
   );
 
+  // Establish that the persistent vault can be safely written before modifying any files.
+  if (vaultPath && !dryRun) savePersistentVault(vaultPath, vault);
+
   for (const filePath of discoveredFiles) {
     const destination = outputPlan.get(filePath);
     const fileResult = await sanitizeFile(
@@ -272,7 +277,8 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
       options.minConfidence ?? 0.5,
       options.disabledCategories ?? [],
       vault,
-      destination
+      destination,
+      vaultPath ? () => savePersistentVault(vaultPath, vault) : undefined
     );
 
     if (fileResult.error) {
@@ -293,8 +299,6 @@ export async function runSanitize(options: SanitizeOptions): Promise<SanitizeRes
 
     results.push(fileResult);
   }
-
-  if (vaultPath && !dryRun) savePersistentVault(vaultPath, vault);
 
   return { summary, results };
 }

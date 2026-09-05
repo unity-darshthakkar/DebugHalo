@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'fs';
+import {
+  mkdirSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  lstatSync,
+  symlinkSync,
+} from 'fs';
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
@@ -121,6 +129,33 @@ describe('CLI Integration - Init Command', { timeout: 30000 }, () => {
     const config = JSON.parse(readFile(testDir, '.debughalo.json'));
     expect(config.extensions).toEqual(['ts', 'tsx', 'js', 'jsx', 'json', 'yaml', 'yml', 'env']);
     expect(config.custom).toBeUndefined();
+  });
+
+  it('refuses --force when the config path is a symbolic link', async ({ skip }) => {
+    const externalDir = createTempDir();
+    const target = writeFile(externalDir, 'outside.json', '{"outside":true}');
+    const configPath = join(testDir, '.debughalo.json');
+    try {
+      symlinkSync(target, configPath, 'file');
+    } catch (error) {
+      cleanupDir(externalDir);
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === 'EPERM' || code === 'EACCES' || code === 'ENOTSUP') {
+        skip();
+        return;
+      }
+      throw error;
+    }
+
+    try {
+      const { stderr, exitCode } = await runCli(['init', '--force'], testDir);
+      expect(exitCode).toBe(2);
+      expect(stderr).toContain('Refusing to sanitize symbolic link');
+      expect(lstatSync(configPath).isSymbolicLink()).toBe(true);
+      expect(readFileSync(target, 'utf8')).toBe('{"outside":true}');
+    } finally {
+      cleanupDir(externalDir);
+    }
   });
 
   it('shows help with --help', async () => {

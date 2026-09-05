@@ -43,6 +43,28 @@ describe('reversible CLI command implementations', () => {
     expect(readFileSync(vault, 'utf8')).not.toBe('');
   });
 
+  it('does not modify a source when its persistent vault cannot be created', async () => {
+    const cwd = fixture();
+    const source = join(cwd, 'input.log');
+    const original = `key=${google}`;
+    writeFileSync(source, original);
+    writeFileSync(join(cwd, '.debughalo'), 'blocks vault directory creation');
+
+    await expect(
+      runSanitize({
+        paths: [source],
+        extensions: [],
+        ignorePatterns: [],
+        dryRun: false,
+        verbose: false,
+        cwd,
+        vaultPath: join(cwd, '.debughalo', 'vault.json'),
+        persistVault: true,
+      })
+    ).rejects.toThrow('Failed to save vault');
+    expect(readFileSync(source, 'utf8')).toBe(original);
+  });
+
   it('rejects a copy path that is the source', async () => {
     const cwd = fixture();
     const source = join(cwd, 'input.log');

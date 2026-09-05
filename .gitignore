@@ -29,38 +29,8 @@ npm-debug.log*
 .env.local
 .env.*.local
 
-# Build outputs
-dist/
-*.tsbuildinfo
-
-# Test coverage
-coverage/
-.nyc_output/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-npm-debug.log*
-
-# Environment
-.env
-.env.local
-.env.*.local
-
-# TypeScript cache
-*.tsbuildinfo
-
-# Coverage directory
-coverage/
+# Local DebugHalo cache and vault data
+.debughalo/
 
 # vitest
 vitest.config.ts.timestamp-*

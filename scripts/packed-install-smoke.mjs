@@ -1,10 +1,11 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
+const packageVersion = JSON.parse(readFileSync(join(projectRoot, 'package.json'), 'utf8')).version;
 const smokeRoot = mkdtempSync(join(tmpdir(), 'debug-halo-packed-install-'));
 const installRoot = join(smokeRoot, 'consumer');
 
@@ -68,7 +69,7 @@ try {
   assert(existsSync(binPath), 'installed CLI executable is missing');
 
   const version = run(binPath, ['--version']);
-  assert(version.status === 0 && version.stdout.includes('0.1.0'), '--version failed');
+  assert(version.status === 0 && version.stdout.trim() === packageVersion, '--version failed');
 
   const help = run(binPath, ['--help']);
   assert(help.status === 0 && help.stdout.includes('Usage:'), '--help failed');

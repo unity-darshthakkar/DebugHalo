@@ -80,9 +80,9 @@ export function loadPersistentVault(path: string): AliasVault {
 }
 
 export function savePersistentVault(path: string, vault: AliasVault): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${process.pid}-${randomUUID()}.tmp`;
   try {
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     writeFileSync(
       temporary,
       `${JSON.stringify({ version: 1, entries: [...vault.entries.values()] }, null, 2)}\n`,
