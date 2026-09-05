@@ -458,4 +458,19 @@ describe('CLI Integration - Scan Command', { timeout: 30000 }, () => {
     expect(removed.stdout).toContain('not installed');
     expect(removedAgain.exitCode).toBe(0);
   });
+
+  it('supports opt-in cache scans plus cache status and clear', async () => {
+    writeFile(testDir, 'clean.ts', 'const clean = true;');
+    const first = await runCli(['scan', testDir, '--cache', '--format', 'json'], testDir);
+    const second = await runCli(['scan', testDir, '--cache', '--format', 'json'], testDir);
+    const status = await runCli(['cache', 'status'], testDir);
+    const cleared = await runCli(['cache', 'clear'], testDir);
+
+    expect(first.exitCode).toBe(0);
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout).toBe(first.stdout);
+    expect(status.stdout).toContain('1 entries');
+    expect(cleared.stdout).toContain('cache cleared');
+    expect(existsSync(join(testDir, '.debughalo', 'cache.json'))).toBe(false);
+  });
 });

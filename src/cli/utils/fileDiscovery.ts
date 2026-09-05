@@ -4,7 +4,7 @@
 import fastGlob from 'fast-glob';
 import ignoreModule, { type Ignore } from 'ignore';
 import { basename, extname, isAbsolute, relative, resolve } from 'path';
-import { readFileSync, existsSync, statSync } from 'fs';
+import { readFileSync, existsSync, lstatSync, statSync } from 'fs';
 
 const { isDynamicPattern } = fastGlob;
 
@@ -45,6 +45,14 @@ function toRelativePath(root: string, filePath: string): string {
 
 function isInsideRoot(relativePath: string): boolean {
   return relativePath !== '..' && !relativePath.startsWith('../') && !isAbsolute(relativePath);
+}
+
+function isSymbolicLink(filePath: string): boolean {
+  try {
+    return lstatSync(filePath).isSymbolicLink();
+  } catch {
+    return false;
+  }
 }
 
 function buildIgnore(extraPatterns: string[] = [], ignoreFilePaths: string[] = []): Ignore {
@@ -90,7 +98,16 @@ function classifyInput(input: string, cwd: string): ClassifiedInput {
   const absolutePath = isAbsolute(input) ? input : resolve(cwd, input);
 
   try {
-    const st = statSync(absolutePath);
+    const lst = lstatSync(absolutePath);
+    if (lst.isSymbolicLink()) {
+      try {
+        if (statSync(absolutePath).isFile()) return { kind: 'file', path: absolutePath };
+      } catch {
+        // Broken symbolic links are handled as missing inputs.
+      }
+      return { kind: 'missing', input };
+    }
+    const st = lst;
     if (st.isFile()) return { kind: 'file', path: absolutePath };
     if (st.isDirectory()) return { kind: 'directory', path: absolutePath };
   } catch {
@@ -174,6 +191,7 @@ export async function discoverFiles(
 
       for (const match of matches) {
         const resolvedMatch = resolve(match);
+        if (isSymbolicLink(resolvedMatch)) continue;
         const relativeToDirectory = toRelativePath(directoryPath, resolvedMatch);
 
         if (directoryIgnore.ignores(relativeToDirectory)) {
@@ -201,6 +219,7 @@ export async function discoverFiles(
 
       for (const match of matches) {
         const resolvedMatch = resolve(match);
+        if (isSymbolicLink(resolvedMatch)) continue;
         const relativeToCwd = toRelativePath(cwd, resolvedMatch);
 
         if (!isInsideRoot(relativeToCwd)) {

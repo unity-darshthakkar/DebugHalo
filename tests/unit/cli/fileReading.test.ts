@@ -214,14 +214,14 @@ describe('File Reading Utility', { timeout: 30000 }, () => {
       expect(result.isBinary).toBe(false);
     });
 
-    it('uses JavaScript string.length semantics for multi-byte UTF-8 input', () => {
+    it('uses byte length semantics for multi-byte UTF-8 input', () => {
       const content = '🌍🌍';
       writeFile(testDir, 'unicode-limit.txt', content);
 
       expect(Buffer.byteLength(content, 'utf8')).toBeGreaterThan(content.length);
       expect(
-        readFileSafe(join(testDir, 'unicode-limit.txt'), { maxInputSize: content.length }).content
-      ).toBe(content);
+        readFileSafe(join(testDir, 'unicode-limit.txt'), { maxInputSize: content.length })
+      ).toMatchObject({ content: '', error: expect.stringContaining('exceeds maximum size') });
     });
 
     it('rejects decoded text over the shared default limit and stops reading early', () => {
@@ -249,7 +249,7 @@ describe('File Reading Utility', { timeout: 30000 }, () => {
       writeFile(testDir, 'split-code-point.txt', content);
 
       const result = readFileSafe(join(testDir, 'split-code-point.txt'), {
-        maxInputSize: content.length,
+        maxInputSize: Buffer.byteLength(content),
         chunkSize: 2,
       });
       expect(result.error).toBeUndefined();

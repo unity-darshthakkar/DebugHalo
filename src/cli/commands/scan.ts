@@ -10,11 +10,22 @@ import {
   FileDiscoveryError,
   isDiscoveryPathIgnored,
 } from '../utils/fileDiscovery.js';
-import { readBufferSafe, readFileSafe, type FileReadResult } from '../utils/fileReading.js';
+import { readBufferSafe, readFileSafeAsync, type FileReadResult } from '../utils/fileReading.js';
 import { listStagedFiles } from '../utils/git.js';
 import { extname, relative } from 'path';
+import { statSync } from 'fs';
+import { availableParallelism } from 'os';
 import chalk from 'chalk';
 import type { DetectionCategory, DetectionSeverity } from '../../types/core.js';
+import { mapConcurrent } from '../utils/concurrency.js';
+import {
+  contentHash,
+  loadScanCache,
+  scanCachePath,
+  scanConfigFingerprint,
+  writeScanCache,
+  type ScanCacheEntry,
+} from '../utils/scanCache.js';
 
 export interface ScanFinding {
   file: string;
@@ -43,6 +54,12 @@ export interface ScanResult {
   summary: ScanSummary;
   findings: ScanFinding[];
   errors: Array<{ file: string; message: string }>;
+  performance?: {
+    concurrency: number;
+    cacheEnabled: boolean;
+    cacheHits: number;
+    cacheMisses: number;
+  };
 }
 
 export interface ScanOptions {
@@ -56,6 +73,9 @@ export interface ScanOptions {
   minConfidence?: number;
   disabledCategories?: string[];
   staged?: boolean;
+  cache?: boolean;
+  concurrency?: number;
+  onProgress?: (completed: number, total: number) => void;
 }
 
 /**
@@ -157,7 +177,11 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
   const normalizedExtensions = normalizeExtensions(extensions);
   const normalizedIgnore = normalizeIgnorePatterns(ignorePatterns);
 
-  let scanInputs: Array<{ file: string; read: () => FileReadResult }>;
+  let scanInputs: Array<{
+    file: string;
+    absolutePath?: string;
+    read: () => FileReadResult | Promise<FileReadResult>;
+  }>;
   if (options.staged) {
     const staged = listStagedFiles(workingDir);
     scanInputs = staged.files
@@ -186,49 +210,109 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
     }
     scanInputs = discoveredFiles.map((file) => ({
       file: relative(workingDir, file),
-      read: () => readFileSafe(file),
+      absolutePath: file,
+      read: () => readFileSafeAsync(file),
     }));
   }
 
   const filesDiscovered = scanInputs.length;
-  const errors: Array<{ file: string; message: string }> = [];
-  const findings: ScanFinding[] = [];
-  let filesScanned = 0;
-  let filesSkipped = 0;
-  let filesFailed = 0;
+  const concurrency = options.concurrency ?? Math.min(availableParallelism(), 4);
+  const useCache = options.cache === true && !options.staged;
+  const fingerprint = scanConfigFingerprint({
+    minConfidence: options.minConfidence ?? 0.5,
+    disabledCategories: options.disabledCategories,
+  });
+  const cachePath = scanCachePath(workingDir);
+  const cache = useCache ? loadScanCache(cachePath, fingerprint) : undefined;
+  const nextEntries: Record<string, ScanCacheEntry> = {};
+  let cacheHits = 0;
+  let cacheMisses = 0;
 
-  for (const scanInput of scanInputs) {
-    // Read file (handles missing/binary/unreadable files)
-    const { content, error } = scanInput.read();
-    if (error) {
-      errors.push({ file: scanInput.file, message: error });
-      if (error === 'Binary file skipped') {
-        filesSkipped++;
-      } else {
-        filesFailed++;
+  type Outcome = {
+    file: string;
+    findings: ScanFinding[];
+    error?: string;
+    skipped?: boolean;
+  };
+  const outcomes = await mapConcurrent(
+    scanInputs,
+    concurrency,
+    async (scanInput): Promise<Outcome> => {
+      try {
+        const { content, error } = await scanInput.read();
+        if (error)
+          return {
+            file: scanInput.file,
+            findings: [],
+            error,
+            skipped: error === 'Binary file skipped',
+          };
+        let metadata: { size: number; mtimeMs: number; hash: string } | undefined;
+        if (useCache && scanInput.absolutePath) {
+          const stat = statSync(scanInput.absolutePath);
+          metadata = { size: stat.size, mtimeMs: stat.mtimeMs, hash: contentHash(content) };
+          const cached = cache!.entries[scanInput.file.replaceAll('\\', '/')];
+          if (
+            cached &&
+            cached.size === metadata.size &&
+            cached.mtimeMs === metadata.mtimeMs &&
+            cached.hash === metadata.hash
+          ) {
+            cacheHits++;
+            nextEntries[scanInput.file.replaceAll('\\', '/')] = cached;
+            return {
+              file: scanInput.file,
+              findings: cached.findings.map((finding) => ({ ...finding, start: 0, end: 0 })),
+            };
+          }
+          cacheMisses++;
+        }
+        const detections = await detectOnly(content, {
+          minConfidence: options.minConfidence ?? 0.5,
+          disabledCategories: options.disabledCategories as DetectionCategory[] | undefined,
+        });
+        const fileFindings = detections.map((detection) =>
+          toScanFinding(scanInput.file, detection)
+        );
+        if (metadata) {
+          nextEntries[scanInput.file.replaceAll('\\', '/')] = {
+            ...metadata,
+            findings: fileFindings.map((finding) => {
+              const { preview, start, end, ...safeFinding } = finding;
+              void preview;
+              void start;
+              void end;
+              return safeFinding;
+            }),
+          };
+        }
+        return { file: scanInput.file, findings: fileFindings };
+      } catch (err) {
+        return {
+          file: scanInput.file,
+          findings: [],
+          error: err instanceof Error ? err.message : String(err),
+        };
       }
-      continue;
-    }
+    },
+    options.onProgress
+  );
 
-    // Detect secrets
-    try {
-      const detections = await detectOnly(content, {
-        minConfidence: options.minConfidence ?? 0.5,
-        disabledCategories: options.disabledCategories as DetectionCategory[] | undefined,
-      });
-      filesScanned++;
-
-      for (const detection of detections) {
-        findings.push(toScanFinding(scanInput.file, detection));
-      }
-    } catch (err) {
-      errors.push({
-        file: scanInput.file,
-        message: err instanceof Error ? err.message : String(err),
-      });
-      filesFailed++;
-    }
+  if (useCache) {
+    writeScanCache(cachePath, {
+      schemaVersion: cache!.schemaVersion,
+      configFingerprint: fingerprint,
+      entries: nextEntries,
+    });
   }
+
+  const errors = outcomes
+    .filter((outcome) => outcome.error)
+    .map((outcome) => ({ file: outcome.file, message: outcome.error! }));
+  const findings = outcomes.flatMap((outcome) => outcome.findings);
+  const filesSkipped = outcomes.filter((outcome) => outcome.skipped).length;
+  const filesFailed = outcomes.filter((outcome) => outcome.error && !outcome.skipped).length;
+  const filesScanned = outcomes.length - filesSkipped - filesFailed;
 
   // Sort findings deterministically: by file, then line, then column
   findings.sort((a, b) => {
@@ -251,6 +335,7 @@ export async function runScan(options: ScanOptions): Promise<ScanResult> {
     },
     findings,
     errors,
+    performance: { concurrency, cacheEnabled: useCache, cacheHits, cacheMisses },
   };
 }
 
@@ -264,12 +349,17 @@ export function outputText(result: ScanResult, verbose: boolean): void {
   console.log(chalk.blue('DebugHalo Scan Results'));
   console.log('');
 
-  console.log(chalk.dim(`Scanned ${summary.filesScanned} files`));
-  if (summary.filesSkipped > 0) {
-    console.log(chalk.yellow(`Skipped ${summary.filesSkipped} binary/unreadable files`));
-  }
-  if (summary.filesFailed > 0) {
-    console.log(chalk.red(`Failed to scan ${summary.filesFailed} files`));
+  console.log(chalk.dim(`Discovered: ${summary.filesDiscovered} files`));
+  console.log(chalk.dim(`Scanned:    ${summary.filesScanned} files`));
+  console.log(chalk.dim(`Skipped:    ${summary.filesSkipped} files`));
+  console.log(chalk.dim(`Failed:     ${summary.filesFailed} files`));
+  console.log(chalk.dim(`Findings:   ${summary.findings}`));
+  if (result.performance?.cacheEnabled) {
+    console.log(
+      chalk.dim(
+        `Cache:      ${result.performance.cacheHits} hits, ${result.performance.cacheMisses} misses`
+      )
+    );
   }
   console.log('');
 
@@ -279,6 +369,23 @@ export function outputText(result: ScanResult, verbose: boolean): void {
   }
 
   console.log(chalk.red(`Found ${findings.length} potential secret(s):`));
+  console.log('');
+
+  const severityOrder: DetectionSeverity[] = ['critical', 'high', 'medium', 'low'];
+  for (const severity of severityOrder) {
+    console.log(
+      `${severity[0]!.toUpperCase()}${severity.slice(1)}: ${findings.filter((f) => f.severity === severity).length}`
+    );
+  }
+  const categories = new Map<string, number>();
+  for (const finding of findings)
+    categories.set(finding.category, (categories.get(finding.category) ?? 0) + 1);
+  console.log(
+    `Categories: ${[...categories]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([category, count]) => `${category}=${count}`)
+      .join(', ')}`
+  );
   console.log('');
 
   for (const finding of findings) {
