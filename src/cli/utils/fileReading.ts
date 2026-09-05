@@ -6,6 +6,7 @@
  */
 
 import { openSync, readSync, closeSync, statSync } from 'fs';
+import { open as openAsync } from 'fs/promises';
 import { StringDecoder } from 'string_decoder';
 import { MAX_INPUT_SIZE } from '../../core/index.js';
 
@@ -49,6 +50,57 @@ interface FileReadOptions {
   maxInputSize?: number;
   chunkSize?: number;
   onChunkRead?: (bytesRead: number) => void;
+}
+
+/** Async equivalent used by the bounded scan worker pool. */
+export async function readFileSafeAsync(
+  filePath: string,
+  options: FileReadOptions = {}
+): Promise<FileReadResult> {
+  const maxInputSize = options.maxInputSize ?? MAX_INPUT_SIZE;
+  const chunkSize = options.chunkSize ?? FILE_READ_CHUNK_SIZE;
+  let handle: Awaited<ReturnType<typeof openAsync>> | undefined;
+  try {
+    handle = await openAsync(filePath, 'r');
+    const binarySample = Buffer.alloc(BINARY_DETECTION_SAMPLE_SIZE);
+    const sample = await handle.read(binarySample, 0, binarySample.length, 0);
+    if (binarySample.subarray(0, sample.bytesRead).includes(0)) {
+      return { content: '', error: 'Binary file skipped', isBinary: true };
+    }
+    const decoder = new StringDecoder('utf8');
+    const buffer = Buffer.alloc(chunkSize);
+    const chunks: string[] = [];
+    let bytesProcessed = 0;
+    let position = 0;
+    let bytesRead = 1;
+    while (bytesRead > 0) {
+      ({ bytesRead } = await handle.read(buffer, 0, buffer.length, position));
+      if (bytesRead === 0) break;
+      const bytes = buffer.subarray(0, bytesRead);
+      position += bytesRead;
+      options.onChunkRead?.(bytesRead);
+      bytesProcessed += bytesRead;
+      if (bytesProcessed > maxInputSize) {
+        return {
+          content: '',
+          error: `File exceeds maximum size of ${maxInputSize} bytes`,
+          isBinary: false,
+        };
+      }
+      chunks.push(decoder.write(bytes));
+    }
+    const finalDecoded = decoder.end();
+    chunks.push(finalDecoded);
+    return { content: chunks.join(''), isBinary: false };
+  } catch (err) {
+    return {
+      content: '',
+      error: err instanceof Error ? err.message : String(err),
+      isBinary: false,
+    };
+  } finally {
+    await handle?.close();
+  }
 }
 
 /**
@@ -103,43 +155,34 @@ export function readFileSafe(filePath: string, options: FileReadOptions = {}): F
     return { content: '', error: 'Binary file skipped', isBinary: true };
   }
 
-  // Decode incrementally because filesystem byte size and JavaScript string.length
-  // are not equivalent for UTF-8 input.
+  // Decode incrementally while enforcing the limit against bytes read.
   let fd: number | undefined;
   try {
     fd = openSync(filePath, 'r');
     const decoder = new StringDecoder('utf8');
     const buffer = Buffer.alloc(chunkSize);
     const chunks: string[] = [];
-    let decodedLength = 0;
+    let bytesProcessed = 0;
 
     let bytesRead: number;
     do {
       bytesRead = readSync(fd, buffer, 0, buffer.length, null);
       if (bytesRead === 0) continue;
       options.onChunkRead?.(bytesRead);
-
-      const decoded = decoder.write(buffer.subarray(0, bytesRead));
-      decodedLength += decoded.length;
-      if (decodedLength > maxInputSize) {
+      bytesProcessed += bytesRead;
+      if (bytesProcessed > maxInputSize) {
         return {
           content: '',
           error: `File exceeds maximum size of ${maxInputSize} bytes`,
           isBinary: false,
         };
       }
+
+      const decoded = decoder.write(buffer.subarray(0, bytesRead));
       chunks.push(decoded);
     } while (bytesRead > 0);
 
     const finalDecoded = decoder.end();
-    decodedLength += finalDecoded.length;
-    if (decodedLength > maxInputSize) {
-      return {
-        content: '',
-        error: `File exceeds maximum size of ${maxInputSize} bytes`,
-        isBinary: false,
-      };
-    }
     chunks.push(finalDecoded);
 
     return { content: chunks.join(''), isBinary: false };

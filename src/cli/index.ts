@@ -28,6 +28,7 @@ import { sanitizeExitCode, scanExitCode } from './exitCodes.js';
 import { atomicWriteOutput } from './utils/atomicWrite.js';
 import { formatJson, formatJsonl, formatSarif } from './formatters/index.js';
 import { VALID_OUTPUT_FORMATS } from './config.js';
+import { clearScanCache, scanCacheStatus } from './utils/scanCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -189,6 +190,7 @@ program
   .option('-o, --output <path-or-format>', 'Output file, or legacy text/json format selector')
   .option('--fail-on-findings', 'Exit with non-zero code if findings detected')
   .option('--staged', 'Scan the content currently staged in Git')
+  .option('--cache', 'Reuse secret-safe results for unchanged filesystem files')
   .action(async (paths, _options, scanCommand) => {
     const globalOpts = program.opts();
     const verbose = globalOpts['verbose'] ?? false;
@@ -224,6 +226,9 @@ program
     }
 
     try {
+      const progressEnabled =
+        mergedConfig.outputFormat === 'text' && !quiet && process.stderr.isTTY === true;
+      let progressRendered = false;
       const result = await runScan({
         paths,
         extensions: mergedConfig.extensions,
@@ -235,7 +240,17 @@ program
         minConfidence: mergedConfig.minConfidence,
         disabledCategories: mergedConfig.disabledCategories,
         staged: scanCommand.opts()['staged'] ?? false,
+        cache: scanCommand.opts()['cache'] ?? false,
+        onProgress: progressEnabled
+          ? (completed, total) => {
+              if (completed === total || completed % 100 === 0) {
+                process.stderr.write(`\rScanned ${completed}/${total} files`);
+                progressRendered = true;
+              }
+            }
+          : undefined,
       });
+      if (progressRendered) process.stderr.write('\n');
 
       const rawOutput = scanCommand.opts()['output'] as string | undefined;
       const outputPath =
@@ -274,6 +289,36 @@ program
         console.error(JSON.stringify({ error: message }, null, 2));
       }
       process.exitCode = 2;
+    }
+  });
+
+program
+  .command('cache')
+  .description('Inspect or clear the local incremental scan cache')
+  .argument('<action>', 'Action: clear or status')
+  .action((action: string) => {
+    const quiet = program.opts()['quiet'] ?? false;
+    try {
+      if (action === 'clear') {
+        const removed = clearScanCache(process.cwd());
+        if (!quiet) console.log(removed ? 'DebugHalo scan cache cleared' : 'No scan cache found');
+        return;
+      }
+      if (action === 'status') {
+        const status = scanCacheStatus(process.cwd());
+        if (!quiet) {
+          console.log(
+            status.exists
+              ? `DebugHalo scan cache: ${status.entries} entries\nCache path: ${status.path}`
+              : `DebugHalo scan cache not found\nCache path: ${status.path}`
+          );
+        }
+        return;
+      }
+      console.error(chalk.red('Error:'), 'Cache action must be clear or status');
+      process.exitCode = 2;
+    } catch (error) {
+      reportFatalError(error);
     }
   });
 

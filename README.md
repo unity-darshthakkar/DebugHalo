@@ -116,6 +116,7 @@ debug-halo scan [paths...] [options]
 | `-o, --output <path>`        | Write machine output to a file            | Standard output                   |
 | `--fail-on-findings`         | Exit with code 1 if any findings detected | `false`                           |
 | `--staged`                   | Scan staged Git index content only        | `false`                           |
+| `--cache`                    | Reuse unchanged filesystem scan results   | `false`                           |
 | `-q, --quiet`                | Suppress nonessential text output         | `false`                           |
 | `--no-color`                 | Disable ANSI color output                 | `false`                           |
 | `-c, --config <path>`        | Path to config file                       | Auto-discovered `.debughalo.json` |
@@ -156,6 +157,9 @@ debug-halo scan --config ./configs/debug-halo.json
 
 # Scan exactly what is staged for the next commit
 debug-halo scan --staged --fail-on-findings
+
+# Opt into the local incremental cache for a large repository
+debug-halo scan . --cache
 ```
 
 With `--staged`, DebugHalo finds the repository root and reads regular-file snapshots directly
@@ -163,6 +167,29 @@ from Git's index. Deleted files, unstaged edits, and untracked files are exclude
 destinations are scanned. Existing extension, `.debughaloignore`, suppression, confidence,
 category, structured-output, quiet, color, and exit-code behavior still applies. No staged files is
 a clean successful scan.
+
+For normal filesystem scans, DebugHalo reads files through a bounded pool of at most four workers
+and restores deterministic file and finding order before rendering results. Interactive text-mode
+scans report progress every 100 completed files on a TTY. Progress is disabled for quiet mode,
+redirected/non-TTY output, and JSON, JSONL, or SARIF output. The final text summary always reports
+discovered, scanned, skipped, failed, and finding counts; scans with findings also group them by
+severity and category.
+
+The incremental cache is deliberately opt-in and is not used for `--staged`. With `--cache`, it is
+stored at `.debughalo/cache.json`, which normal discovery excludes. Each reusable entry requires an
+exact schema version, detection-configuration fingerprint, normalized path, byte size, modification
+time, and SHA-256 content hash match. Cached finding metadata omits raw values, previews, snippets,
+and source content. The hash is for change detection, not cryptographic integrity; a malformed,
+incompatible, or differently configured cache is safely rebuilt. Inspect or remove it with:
+
+```bash
+debug-halo cache status
+debug-halo cache clear
+```
+
+Changing `minConfidence` or `disabledCategories` invalidates the cache. Presentation-only options
+such as color do not. For large repositories, start with the default bounded concurrency and opt
+into `--cache` when the local metadata file is acceptable.
 
 ### `debug-halo hook`
 
@@ -450,13 +477,14 @@ DebugHalo detects various secret types and PII categories:
 
 - **No raw secrets in output**: Text output never prints values; machine formats omit previews, source context, and raw offsets
 - **Binary file skipping**: Files containing NUL bytes are automatically skipped
-- **Bounded text input**: UTF-8 text is supported up to the core 10 MiB input limit; oversized inputs fail without an unbounded whole-file read
+- **Bounded text input**: CLI filesystem and staged inputs use a 10 MiB byte limit; oversized UTF-8 files fail and are never silently truncated
 - **`.gitignore` respected**: Patterns from local `.gitignore` are automatically applied
 - **Dedicated ignore file**: `.debughaloignore` excludes tool-specific file globs without changing Git behavior
 - **Default exclusions**: `.git/**`, `node_modules/**`, `dist/**`, `coverage/**` are always ignored
 - **Dry-run mode**: Preview sanitization changes without writing files
 - **Safer replacement**: Sanitized content is written to a temporary file in the same directory and atomically replaces the regular target; no persistent backup copy is created
 - **Symlink refusal**: Sanitize refuses symbolic-link targets instead of replacing them or writing through them
+- **Predictable scan symlinks**: Recursive discovery does not follow file or directory symlinks, preventing loops; an explicitly named file symlink is read-only scan input, while broken links are rejected as missing
 
 These safeguards reduce common write and input-handling risks, but they do not guarantee recovery from every operating-system, hardware, or filesystem failure. Use version control or another backup strategy before sanitizing important files.
 
@@ -531,7 +559,7 @@ runs the upload step even when the scan reports findings.
 - **No Chrome extension** — CLI only
 - **No AI integrations** — Standalone detector/sanitizer
 - **Limited detector set** — Covers common secret types; not exhaustive
-- **No scan cache** — Normal scans reprocess selected files; `scan --staged` limits input to Git index snapshots
+- **Opt-in cache only** — Normal scans reprocess selected files unless `--cache` is supplied; staged scans intentionally bypass the filesystem cache
 
 ## Supported Platforms
 
