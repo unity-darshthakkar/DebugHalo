@@ -13,8 +13,8 @@ import { createVaultFromEntries } from './aliasVault.js';
 export const DEFAULT_VAULT_PATH = resolve(homedir(), '.debughalo', 'vault.json');
 
 export class PersistentVaultError extends Error {
-  constructor(message: string) {
-    super(message);
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = 'PersistentVaultError';
   }
 }
@@ -90,9 +90,14 @@ export function savePersistentVault(path: string, vault: AliasVault): void {
     );
     renameSync(temporary, path);
   } catch (error) {
-    rmSync(temporary, { force: true });
+    try {
+      rmSync(temporary, { force: true });
+    } catch {
+      // Cleanup is best-effort and must not replace the primary save failure.
+    }
     throw new PersistentVaultError(
-      `Failed to save vault: ${error instanceof Error ? error.message : 'unknown filesystem error'}`
+      `Failed to save vault: ${error instanceof Error ? error.message : 'unknown filesystem error'}`,
+      { cause: error }
     );
   }
 }
