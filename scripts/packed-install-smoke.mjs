@@ -79,6 +79,20 @@ try {
   const scan = run(binPath, ['scan', scanTarget]);
   assert(scan.status === 0 && scan.stdout.includes('No potential secrets'), 'scan failed');
 
+  const secretTarget = join(installRoot, 'secret.ts');
+  const testSecret = `AIza${'Ab3_'.repeat(8)}Ab3`;
+  writeFileSync(secretTarget, `const apiKey = '${testSecret}';\n`, 'utf8');
+  const findingScan = run(binPath, ['scan', secretTarget, '--fail-on-findings']);
+  assert(findingScan.status === 1, 'finding scan did not return the finding exit code');
+  assert(!findingScan.stdout.includes(testSecret), 'finding scan exposed the raw secret');
+
+  const sanitize = run(binPath, ['sanitize', secretTarget, '--dry-run']);
+  assert(sanitize.status === 1, 'sanitize dry-run did not report a pending change');
+  assert(
+    readFileSync(secretTarget, 'utf8') === `const apiKey = '${testSecret}';\n`,
+    'sanitize dry-run modified its input'
+  );
+
   const apiImport = execFileSync(
     process.execPath,
     [
@@ -88,7 +102,7 @@ try {
     ],
     { cwd: installRoot, encoding: 'utf8' }
   );
-  assert(apiImport === '0.2.0', 'public ESM API import failed');
+  assert(apiImport === packageVersion, 'public ESM API import failed');
 
   const typeEntry = join(packageRoot, 'dist', 'core', 'index.d.ts');
   assert(existsSync(typeEntry), 'public TypeScript declaration entrypoint is missing');
@@ -121,6 +135,7 @@ function validatePackedFiles(files) {
   const required = [
     'package.json',
     'README.md',
+    'CHANGELOG.md',
     'LICENSE',
     'dist/core/index.js',
     'dist/core/index.d.ts',
