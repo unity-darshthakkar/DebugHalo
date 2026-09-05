@@ -6,6 +6,7 @@ import { createAliasVault, getOrCreateAlias } from '@/core/aliasVault.js';
 import {
   assertSafeVaultPath,
   loadPersistentVault,
+  PersistentVaultError,
   savePersistentVault,
 } from '@/core/persistentVault.js';
 
@@ -81,6 +82,21 @@ describe('persistent vault', () => {
     const document = JSON.parse(readFileSync(path, 'utf8'));
     expect(document).toMatchObject({ version: 1 });
     expect(Object.keys(document)).toEqual(['version', 'entries']);
+  });
+
+  it('wraps save and cleanup failures when the vault parent is not a directory', () => {
+    const directory = temporaryDirectory();
+    const blockedParent = join(directory, '.debughalo');
+    writeFileSync(blockedParent, 'not a directory');
+
+    try {
+      savePersistentVault(join(blockedParent, 'vault.json'), createAliasVault());
+      throw new Error('Expected savePersistentVault to fail');
+    } catch (error) {
+      expect(error).toBeInstanceOf(PersistentVaultError);
+      expect(error).toHaveProperty('message', expect.stringContaining('Failed to save vault'));
+      expect((error as PersistentVaultError).cause).toBeInstanceOf(Error);
+    }
   });
 
   it('rejects ordinary project paths and permits the excluded .debughalo directory', () => {

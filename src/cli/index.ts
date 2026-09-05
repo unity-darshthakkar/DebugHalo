@@ -10,7 +10,7 @@ import { Command, CommanderError } from 'commander';
 import chalk from 'chalk';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 
 import { runScan, outputText } from './commands/scan.js';
 import { runSanitize, outputText as outputSanitizeText } from './commands/sanitize.js';
@@ -493,7 +493,7 @@ program
 
     try {
       const defaultConfig = createDefaultConfigFile();
-      writeFileSync(configPath, defaultConfig, 'utf-8');
+      atomicWriteOutput(configPath, defaultConfig);
       if (!(program.opts()['quiet'] ?? false)) {
         console.log(chalk.green('✓'), `Created config file: ${configPath}`);
         console.log(chalk.dim('Edit this file to customize your DebugHalo settings.'));
