@@ -17,6 +17,8 @@ describe('browser extension manifest', () => {
     expect(manifest.host_permissions).toEqual([
       'https://chatgpt.com/*',
       'https://chat.openai.com/*',
+      'https://claude.ai/*',
+      'https://gemini.google.com/*',
     ]);
     expect(manifest.content_scripts).toEqual([
       {
@@ -24,10 +26,18 @@ describe('browser extension manifest', () => {
         js: ['chatgpt.js'],
         run_at: 'document_start',
       },
+      {
+        matches: ['https://claude.ai/*'],
+        js: ['claude.js'],
+        run_at: 'document_start',
+      },
+      {
+        matches: ['https://gemini.google.com/*'],
+        js: ['gemini.js'],
+        run_at: 'document_start',
+      },
     ]);
     expect(JSON.stringify(manifest)).not.toContain('<all_urls>');
-    expect(JSON.stringify(manifest)).not.toContain('claude');
-    expect(JSON.stringify(manifest)).not.toContain('gemini');
     expect(manifest.background).toBeUndefined();
   });
 });

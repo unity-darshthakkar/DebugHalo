@@ -45,8 +45,7 @@ export function showReview(document: Document, request: ReviewRequest): Promise<
     const previewHeading = document.createElement('h3');
     previewHeading.textContent = 'Sanitized message preview';
     const previewNote = document.createElement('p');
-    previewNote.textContent =
-      'This modified text will replace the ChatGPT composer before sending.';
+    previewNote.textContent = 'This modified text will replace the site composer before sending.';
     const previewText = document.createElement('pre');
     previewText.dataset['debughaloPreviewText'] = 'true';
     preview.append(previewHeading, previewNote, previewText);

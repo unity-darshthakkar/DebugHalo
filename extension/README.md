@@ -13,11 +13,14 @@ npm run build:extension
 Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select
 `extension/dist`.
 
-## Manual ChatGPT validation
+## Manual site validation
 
 Use only fake/test credentials.
 
-1. Open `https://chatgpt.com/` and confirm a clean message sends normally.
+Run this checklist separately on `https://chatgpt.com/`, `https://claude.ai/`, and
+`https://gemini.google.com/`:
+
+1. Confirm a clean message sends normally.
 2. Enter a message containing a realistic DebugHalo test credential and attempt to send it.
 3. Add a second fake sensitive value and confirm both findings appear in one review surface.
 4. Confirm the review shows category, detector, severity, confidence, and safe explanations without
@@ -37,7 +40,7 @@ Use only fake/test credentials.
 
 ## Current scope
 
-Only ChatGPT text submission through the normal Send button or Enter key is covered. Site-specific
-selectors live in `src/adapters/chatgpt.ts`, while the review UI lives in `src/ui/review.ts`. File
-attachments, other AI sites, restoration, and persistent extension preferences are intentionally
-deferred.
+ChatGPT, Claude, and Gemini text submission through their normal Send button or Enter key is
+covered. Site-specific selectors live in `src/adapters/`, shared submission protection lives in
+`src/adapters/siteProtection.ts`, and the review UI lives in `src/ui/review.ts`. File attachments,
+other AI sites, restoration, and persistent extension preferences are intentionally deferred.
