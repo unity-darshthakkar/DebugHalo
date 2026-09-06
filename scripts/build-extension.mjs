@@ -10,15 +10,26 @@ const outputDirectory = resolve(extensionRoot, 'dist');
 rmSync(outputDirectory, { recursive: true, force: true });
 mkdirSync(outputDirectory, { recursive: true });
 
-await build({
-  entryPoints: [resolve(extensionRoot, 'src', 'popup', 'index.ts')],
-  outfile: resolve(outputDirectory, 'popup.js'),
+const commonOptions = {
   bundle: true,
-  format: 'esm',
   platform: 'browser',
   target: 'chrome120',
   sourcemap: true,
   logLevel: 'info',
+};
+
+await build({
+  ...commonOptions,
+  entryPoints: [resolve(extensionRoot, 'src', 'popup', 'index.ts')],
+  outfile: resolve(outputDirectory, 'popup.js'),
+  format: 'esm',
+});
+
+await build({
+  ...commonOptions,
+  entryPoints: [resolve(extensionRoot, 'src', 'content', 'chatgpt.ts')],
+  outfile: resolve(outputDirectory, 'chatgpt.js'),
+  format: 'iife',
 });
 
 for (const file of ['manifest.json', 'popup.html', 'popup.css']) {

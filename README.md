@@ -105,10 +105,11 @@ import { scanText, sanitizeText } from 'debug-halo/browser';
 const findings = await scanText(text);
 ```
 
-## Browser extension foundation
+## Browser extension
 
-The repository includes a permission-free Manifest V3 popup that demonstrates local scanning with
-the same detector pipeline used by the CLI:
+The repository includes a Manifest V3 extension that uses the same detector pipeline as the CLI.
+Its popup provides a local scanner demo, and its ChatGPT content script checks outgoing composer
+text when the user clicks Send or presses Enter:
 
 ```bash
 npm run typecheck:extension
@@ -116,9 +117,13 @@ npm run build:extension
 ```
 
 Load `extension/dist` as an unpacked extension from `chrome://extensions` after enabling Developer
-mode. The popup accepts manually entered text and displays structured category, severity, and
-confidence information. It does not request host permissions, inspect pages, intercept messages, or
-send content over the network.
+mode. ChatGPT messages with findings are held for an explicit Cancel or Send Anyway decision. The
+warning displays only category, severity, and confidence—not raw matched values. Shift+Enter remains
+available for multiline input.
+
+Host access is limited to `chatgpt.com` and the legacy `chat.openai.com` application domain. Scanning
+is performed locally; DebugHalo does not transmit, log, or persist composer text. See the
+[extension validation guide](./extension/README.md) for the current scope and manual test checklist.
 
 ## 📖 Commands
 
