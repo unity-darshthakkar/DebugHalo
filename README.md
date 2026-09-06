@@ -108,8 +108,8 @@ const findings = await scanText(text);
 ## Browser extension
 
 The repository includes a Manifest V3 extension that uses the same detector pipeline as the CLI.
-Its popup provides a local scanner demo, and its ChatGPT content script checks outgoing composer
-text when the user clicks Send or presses Enter:
+Its popup provides a local scanner demo, and its ChatGPT, Claude, and Gemini content scripts check
+outgoing composer text when the user clicks Send or presses Enter:
 
 ```bash
 npm run typecheck:extension
@@ -117,13 +117,14 @@ npm run build:extension
 ```
 
 Load `extension/dist` as an unpacked extension from `chrome://extensions` after enabling Developer
-mode. ChatGPT messages with findings are held for review. Users can cancel, explicitly send the
-original, or sanitize locally and inspect the alias-based result before confirming a modified send.
+mode. Messages with findings are held for review. Users can cancel, explicitly send the original,
+or sanitize locally and inspect the alias-based result before confirming a modified send.
 The review displays category, detector, severity, confidence, and safe explanations—not raw matched
 values. Shift+Enter remains available for multiline input.
 
-Host access is limited to `chatgpt.com` and the legacy `chat.openai.com` application domain. Scanning
-is performed locally; DebugHalo does not transmit, log, or persist composer text. See the
+Host access is limited to `chatgpt.com`, legacy `chat.openai.com`, `claude.ai`, and
+`gemini.google.com`. Scanning is performed locally; DebugHalo does not transmit, log, or persist
+composer text. See the
 [extension validation guide](./extension/README.md) for the current scope and manual test checklist.
 
 ## 📖 Commands

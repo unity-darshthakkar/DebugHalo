@@ -25,12 +25,14 @@ await build({
   format: 'esm',
 });
 
-await build({
-  ...commonOptions,
-  entryPoints: [resolve(extensionRoot, 'src', 'content', 'chatgpt.ts')],
-  outfile: resolve(outputDirectory, 'chatgpt.js'),
-  format: 'iife',
-});
+for (const site of ['chatgpt', 'claude', 'gemini']) {
+  await build({
+    ...commonOptions,
+    entryPoints: [resolve(extensionRoot, 'src', 'content', `${site}.ts`)],
+    outfile: resolve(outputDirectory, `${site}.js`),
+    format: 'iife',
+  });
+}
 
 for (const file of ['manifest.json', 'popup.html', 'popup.css']) {
   cpSync(resolve(extensionRoot, file), resolve(outputDirectory, file));
