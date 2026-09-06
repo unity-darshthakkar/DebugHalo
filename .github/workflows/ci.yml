@@ -36,11 +36,17 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Type check browser extension
+        run: npm run typecheck:extension
+
       - name: Run tests
         run: npm run test
 
       - name: Build
         run: npm run build
+
+      - name: Build browser extension
+        run: npm run build:extension
 
       - name: Test packed installation
         run: npm run test:package

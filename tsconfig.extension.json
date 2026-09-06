@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["extension/src/**/*.ts", "src/browser/**/*.ts"],
+  "exclude": ["node_modules", "dist", "coverage", "extension/dist"]
+}

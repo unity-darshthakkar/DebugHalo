@@ -96,6 +96,30 @@ const sanitized = await quickSanitize('Contact user@example.com');
 
 TypeScript declarations are included. CommonJS `require()` is not a supported entry point.
 
+Browser bundles can import the Node-free scanning boundary without pulling in CLI or filesystem
+vault code:
+
+```ts
+import { scanText, sanitizeText } from 'debug-halo/browser';
+
+const findings = await scanText(text);
+```
+
+## Browser extension foundation
+
+The repository includes a permission-free Manifest V3 popup that demonstrates local scanning with
+the same detector pipeline used by the CLI:
+
+```bash
+npm run typecheck:extension
+npm run build:extension
+```
+
+Load `extension/dist` as an unpacked extension from `chrome://extensions` after enabling Developer
+mode. The popup accepts manually entered text and displays structured category, severity, and
+confidence information. It does not request host permissions, inspect pages, intercept messages, or
+send content over the network.
+
 ## 📖 Commands
 
 ### `debug-halo scan`

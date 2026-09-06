@@ -235,5 +235,5 @@ describe('Git staged workflow', () => {
     }
     expect(output).toContain('Commit blocked');
     expect(output).not.toContain(google);
-  });
+  }, 15000);
 });

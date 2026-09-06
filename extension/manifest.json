@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "DebugHalo",
+  "version": "1.0.0",
+  "description": "Locally scan text for secrets and sensitive information before sharing it.",
+  "action": {
+    "default_title": "DebugHalo",
+    "default_popup": "popup.html"
+  }
+}
