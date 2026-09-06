@@ -117,9 +117,10 @@ npm run build:extension
 ```
 
 Load `extension/dist` as an unpacked extension from `chrome://extensions` after enabling Developer
-mode. ChatGPT messages with findings are held for an explicit Cancel or Send Anyway decision. The
-warning displays only category, severity, and confidence—not raw matched values. Shift+Enter remains
-available for multiline input.
+mode. ChatGPT messages with findings are held for review. Users can cancel, explicitly send the
+original, or sanitize locally and inspect the alias-based result before confirming a modified send.
+The review displays category, detector, severity, confidence, and safe explanations—not raw matched
+values. Shift+Enter remains available for multiline input.
 
 Host access is limited to `chatgpt.com` and the legacy `chat.openai.com` application domain. Scanning
 is performed locally; DebugHalo does not transmit, log, or persist composer text. See the

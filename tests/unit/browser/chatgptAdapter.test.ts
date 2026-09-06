@@ -98,7 +98,7 @@ describe('ChatGPT adapter', () => {
 
     expect(sends).toBe(0);
     expect(warning.textContent).toContain('google_api_key');
-    expect(warning.textContent).toContain('high');
+    expect(warning.textContent).toContain('HIGH');
     expect(warning.textContent).not.toContain(rawSecret);
 
     warningButton('Cancel').click();
