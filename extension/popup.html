@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DebugHalo</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1>DebugHalo</h1>
+      <p>Local scanner demo</p>
+      <label for="input">Text to inspect</label>
+      <textarea id="input" rows="7" spellcheck="false"></textarea>
+      <button id="scan" type="button">Scan locally</button>
+      <p id="summary" role="status">No scan run yet.</p>
+      <ul id="findings" aria-label="Findings"></ul>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

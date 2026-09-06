@@ -104,6 +104,17 @@ try {
   );
   assert(apiImport === packageVersion, 'public ESM API import failed');
 
+  const browserImport = execFileSync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '--eval',
+      "import { scanText } from 'debug-halo/browser'; const findings = await scanText(`key=AIza${'Ab3_'.repeat(8)}Ab3`); process.stdout.write(String(findings.length));",
+    ],
+    { cwd: installRoot, encoding: 'utf8' }
+  );
+  assert(browserImport === '1', 'browser-safe package API import failed');
+
   const typeEntry = join(packageRoot, 'dist', 'core', 'index.d.ts');
   assert(existsSync(typeEntry), 'public TypeScript declaration entrypoint is missing');
   writeFileSync(
@@ -139,6 +150,8 @@ function validatePackedFiles(files) {
     'LICENSE',
     'dist/core/index.js',
     'dist/core/index.d.ts',
+    'dist/browser/index.js',
+    'dist/browser/index.d.ts',
     'dist/cli/index.js',
   ];
   for (const path of required) assert(files.includes(path), `packed file is missing: ${path}`);
