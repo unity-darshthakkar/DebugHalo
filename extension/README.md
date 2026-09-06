@@ -17,8 +17,28 @@ Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and
 
 Use only fake/test credentials.
 
-Run this checklist separately on `https://chatgpt.com/`, `https://claude.ai/`, and
-`https://gemini.google.com/`:
+1. Open the popup and confirm ChatGPT, Claude, and Gemini are listed, protection is ON, and all
+   session counters are numeric.
+2. On `https://chatgpt.com/`, send a clean message and confirm the scanned count increments.
+3. Enter a realistic fake credential, attempt to send it, and confirm both scanned and blocked counts
+   increment.
+4. Choose **Sanitize**, confirm the sanitized preview, send it, and confirm the sanitized count
+   increments.
+5. Trigger another review, choose **Send Anyway**, and confirm that count increments.
+6. Turn protection OFF in the popup and confirm a sensitive test message is neither scanned nor
+   intercepted.
+7. Turn protection ON and confirm protection resumes without refreshing the page.
+8. Select **Automatically sanitize and preview** and confirm a sensitive submission opens directly to
+   a local sanitized preview but is not sent until confirmed.
+9. Select **Block sending** and confirm a sensitive submission offers only a return to editing, not
+   Send Anyway.
+10. Repeat protection OFF/ON and one sensitive submission on `https://claude.ai/` and
+    `https://gemini.google.com/`.
+11. Close and reopen the popup and confirm preferences remain correct and session counters remain.
+12. Inspect extension storage and confirm it contains only `protectionEnabled`, `onDetection`, and the
+    four numeric counters—never message text, findings, secrets, or composer snapshots.
+
+For each site, also verify the submission safety workflow:
 
 1. Confirm a clean message sends normally.
 2. Enter a message containing a realistic DebugHalo test credential and attempt to send it.
@@ -42,5 +62,17 @@ Run this checklist separately on `https://chatgpt.com/`, `https://claude.ai/`, a
 
 ChatGPT, Claude, and Gemini text submission through their normal Send button or Enter key is
 covered. Site-specific selectors live in `src/adapters/`, shared submission protection lives in
-`src/adapters/siteProtection.ts`, and the review UI lives in `src/ui/review.ts`. File attachments,
-other AI sites, restoration, and persistent extension preferences are intentionally deferred.
+`src/adapters/siteProtection.ts`, extension-only state lives in `src/state/`, and the review UI lives
+in `src/ui/review.ts`.
+
+Preferences are stored in `chrome.storage.local`. The four safe numeric counters are stored in
+`chrome.storage.session`, so they describe the current browser session and reset when that session
+ends. A minimal extension service worker enables Chrome's required content-script access to session
+storage before protection initializes; it does not process or retain message content. Storage updates
+are observed live by all supported-site content scripts. DebugHalo never stores raw or sanitized
+messages, secrets, findings, or composer snapshots and makes no network requests.
+
+Credential- and PII-specific toggles are not exposed because the current browser/core API does not
+provide clean category-selective execution; the popup does not present controls it cannot enforce.
+File attachments, restoration, an extension vault, other AI sites, and persistent statistics are
+intentionally deferred.

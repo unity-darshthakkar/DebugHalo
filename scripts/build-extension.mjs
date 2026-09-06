@@ -25,6 +25,13 @@ await build({
   format: 'esm',
 });
 
+await build({
+  ...commonOptions,
+  entryPoints: [resolve(extensionRoot, 'src', 'background', 'index.ts')],
+  outfile: resolve(outputDirectory, 'background.js'),
+  format: 'esm',
+});
+
 for (const site of ['chatgpt', 'claude', 'gemini']) {
   await build({
     ...commonOptions,

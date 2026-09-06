@@ -1,3 +1,4 @@
 import { installClaudeProtection } from '../adapters/claude.js';
+import { installConfiguredProtection } from './installProtection.js';
 
-installClaudeProtection(document);
+void installConfiguredProtection(installClaudeProtection);

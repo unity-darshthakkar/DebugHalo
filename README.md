@@ -108,8 +108,8 @@ const findings = await scanText(text);
 ## Browser extension
 
 The repository includes a Manifest V3 extension that uses the same detector pipeline as the CLI.
-Its popup provides a local scanner demo, and its ChatGPT, Claude, and Gemini content scripts check
-outgoing composer text when the user clicks Send or presses Enter:
+Its popup controls protection, detection behavior, and safe session counters. ChatGPT, Claude, and
+Gemini content scripts check outgoing composer text when the user clicks Send or presses Enter:
 
 ```bash
 npm run typecheck:extension
@@ -126,6 +126,12 @@ Host access is limited to `chatgpt.com`, legacy `chat.openai.com`, `claude.ai`, 
 `gemini.google.com`. Scanning is performed locally; DebugHalo does not transmit, log, or persist
 composer text. See the
 [extension validation guide](./extension/README.md) for the current scope and manual test checklist.
+
+The popup offers persistent Protection ON/OFF and on-detection preferences: **Ask me**,
+**Automatically sanitize and preview**, and **Block sending**. Automatic sanitization always shows a
+preview and still requires confirmation. Safe numeric counters use session-scoped extension storage
+and reset when the browser session ends. The extension requests only the `storage` permission in
+addition to its four exact host permissions.
 
 ## 📖 Commands
 
