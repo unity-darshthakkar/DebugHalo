@@ -3,6 +3,14 @@
   "name": "DebugHalo",
   "version": "1.0.0",
   "description": "Locally scan text for secrets and sensitive information before sharing it.",
+  "host_permissions": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["chatgpt.js"],
+      "run_at": "document_start"
+    }
+  ],
   "action": {
     "default_title": "DebugHalo",
     "default_popup": "popup.html"
