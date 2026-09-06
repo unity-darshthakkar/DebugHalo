@@ -9,6 +9,7 @@ export interface ReviewRequest {
   findings: ReadonlyArray<DetectionResult>;
   originalText: string;
   sanitize: (text: string) => Promise<SanitizationResult>;
+  startWithSanitize?: boolean;
 }
 
 export type ReviewPresenter = (request: ReviewRequest) => Promise<ReviewDecision>;
@@ -80,7 +81,7 @@ export function showReview(document: Document, request: ReviewRequest): Promise<
       details.hidden = !details.hidden;
       review.textContent = details.hidden ? 'Review findings' : 'Hide details';
     });
-    sanitize.addEventListener('click', async () => {
+    const sanitizeMessage = async (): Promise<void> => {
       sanitize.disabled = true;
       sanitize.textContent = 'Sanitizing locally…';
       try {
@@ -101,7 +102,8 @@ export function showReview(document: Document, request: ReviewRequest): Promise<
         sanitize.textContent = 'Sanitize';
         summary.textContent = 'DebugHalo could not sanitize this message locally.';
       }
-    });
+    };
+    sanitize.addEventListener('click', () => void sanitizeMessage());
     back.addEventListener('click', () => finish({ action: 'cancel' }), { once: true });
     confirm.addEventListener(
       'click',
@@ -115,6 +117,28 @@ export function showReview(document: Document, request: ReviewRequest): Promise<
     panel.append(actions);
     document.documentElement.append(overlay);
     cancel.focus();
+    if (request.startWithSanitize) void sanitizeMessage();
+  });
+}
+
+export function showBlocked(document: Document): Promise<ReviewDecision> {
+  return new Promise((resolve) => {
+    removeExistingDialog(document);
+    const { overlay, panel } = createDialog(document, 'Sensitive content blocked');
+    const message = document.createElement('p');
+    message.textContent = 'Return to the composer and edit the sensitive content before sending.';
+    const close = actionButton(document, 'Return to editing');
+    close.addEventListener(
+      'click',
+      () => {
+        overlay.remove();
+        resolve({ action: 'cancel' });
+      },
+      { once: true }
+    );
+    panel.append(message, close);
+    document.documentElement.append(overlay);
+    close.focus();
   });
 }
 

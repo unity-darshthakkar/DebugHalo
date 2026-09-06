@@ -27,6 +27,22 @@ afterEach(() => {
 });
 
 describe('ChatGPT sanitize review workflow', () => {
+  it('automatically prepares a sanitized preview without sending', async () => {
+    const sanitize = vi.fn().mockResolvedValue({ sanitizedText: 'safe alias', aliases: [] });
+    const decision = showReview(document, {
+      findings: [googleFinding],
+      originalText: googleKey,
+      sanitize,
+      startWithSanitize: true,
+    });
+
+    const preview = await previewElement();
+    expect(sanitize).toHaveBeenCalledWith(googleKey);
+    expect(preview.textContent).toContain('safe alias');
+    action('Back to editing').click();
+    await expect(decision).resolves.toEqual({ action: 'cancel' });
+  });
+
   it('groups multiple findings and renders only safe review metadata', async () => {
     const decision = showReview(document, {
       findings: [googleFinding, emailFinding],

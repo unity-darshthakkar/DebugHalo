@@ -5,12 +5,18 @@ import {
   type SanitizationResult,
 } from '../../../src/browser/index.js';
 import {
+  showBlocked,
   showComposerChanged,
   showReview,
   showScanFailure,
   type ReviewDecision,
   type ReviewPresenter,
 } from '../ui/review.js';
+import type {
+  DetectionAction,
+  ExtensionSettings,
+  SessionCounter,
+} from '../state/extensionState.js';
 
 const installedProtections = new WeakMap<Document, Map<string, SiteProtection>>();
 
@@ -27,6 +33,8 @@ export interface SiteProtectionOptions {
   presentReview?: ReviewPresenter;
   presentScanFailure?: () => Promise<'cancel' | 'send'>;
   notifyComposerChanged?: () => void;
+  getPolicy?: () => Pick<ExtensionSettings, 'protectionEnabled' | 'onDetection'>;
+  recordEvent?: (counter: SessionCounter) => void | Promise<void>;
 }
 
 export interface SiteAdapterConfig {
@@ -92,6 +100,8 @@ export function installSiteProtection(
   const presentScanFailure = options.presentScanFailure ?? (() => showScanFailure(document));
   const notifyComposerChanged =
     options.notifyComposerChanged ?? (() => showComposerChanged(document));
+  const getPolicy = options.getPolicy ?? (() => ({ protectionEnabled: true, onDetection: 'ask' }));
+  const recordEvent = options.recordEvent ?? (() => undefined);
   const bypassTargets = new WeakSet<EventTarget>();
   let pending = false;
 
@@ -111,7 +121,8 @@ export function installSiteProtection(
     decision: ReviewDecision,
     composer: HTMLElement,
     resumeTarget: HTMLElement,
-    pendingText: string
+    pendingText: string,
+    hadFindings: boolean
   ): Promise<void> => {
     if (decision.action === 'cancel') {
       composer.focus();
@@ -122,6 +133,7 @@ export function installSiteProtection(
       return;
     }
     if (decision.action === 'send-original') {
+      if (hadFindings) void recordEvent('sendAnywayUses');
       resume(resumeTarget);
       return;
     }
@@ -138,11 +150,14 @@ export function installSiteProtection(
       notifyComposerChanged();
       return;
     }
+    void recordEvent('messagesSanitized');
     resume(findSendButton(document, currentComposer, sendButtonSelector) ?? currentComposer);
   };
 
   const protect = async (event: Event, composer: HTMLElement, resumeTarget: HTMLElement) => {
     if (bypassTargets.delete(resumeTarget)) return;
+    const policy = getPolicy();
+    if (!policy.protectionEnabled) return;
 
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -154,22 +169,37 @@ export function installSiteProtection(
 
     try {
       const findings = await scan(pendingText);
+      void recordEvent('messagesScanned');
+      if (findings.length > 0) void recordEvent('sensitiveSubmissionsBlocked');
       const decision: ReviewDecision =
         findings.length === 0
           ? { action: 'send-original' }
-          : await presentReview({ findings, originalText: pendingText, sanitize });
-      await applyDecision(decision, composer, resumeTarget, pendingText);
+          : await presentDetection(policy.onDetection, {
+              findings,
+              originalText: pendingText,
+              sanitize,
+            });
+      await applyDecision(decision, composer, resumeTarget, pendingText, findings.length > 0);
     } catch {
       const action = await presentScanFailure();
       await applyDecision(
         { action: action === 'send' ? 'send-original' : 'cancel' },
         composer,
         resumeTarget,
-        pendingText
+        pendingText,
+        false
       );
     } finally {
       pending = false;
     }
+  };
+
+  const presentDetection = (
+    action: DetectionAction,
+    request: Parameters<ReviewPresenter>[0]
+  ): Promise<ReviewDecision> => {
+    if (action === 'block') return showBlocked(document);
+    return presentReview({ ...request, startWithSanitize: action === 'sanitize' });
   };
 
   const onClick = (event: MouseEvent): void => {

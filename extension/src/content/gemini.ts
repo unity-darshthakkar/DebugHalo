@@ -1,3 +1,4 @@
 import { installGeminiProtection } from '../adapters/gemini.js';
+import { installConfiguredProtection } from './installProtection.js';
 
-installGeminiProtection(document);
+void installConfiguredProtection(installGeminiProtection);

@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 describe('browser extension manifest', () => {
-  it('limits its Manifest V3 content script and host access to ChatGPT', () => {
+  it('limits its Manifest V3 access to supported sites and extension storage', () => {
     const manifest = JSON.parse(readFileSync(resolve('extension/manifest.json'), 'utf8'));
     const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
 
@@ -13,7 +13,7 @@ describe('browser extension manifest', () => {
       version: packageJson.version,
       action: { default_popup: 'popup.html' },
     });
-    expect(manifest.permissions).toBeUndefined();
+    expect(manifest.permissions).toEqual(['storage']);
     expect(manifest.host_permissions).toEqual([
       'https://chatgpt.com/*',
       'https://chat.openai.com/*',
@@ -38,6 +38,6 @@ describe('browser extension manifest', () => {
       },
     ]);
     expect(JSON.stringify(manifest)).not.toContain('<all_urls>');
-    expect(manifest.background).toBeUndefined();
+    expect(manifest.background).toEqual({ service_worker: 'background.js', type: 'module' });
   });
 });
