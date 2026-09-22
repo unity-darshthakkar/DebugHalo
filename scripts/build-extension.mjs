@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -6,6 +6,14 @@ import { build } from 'esbuild';
 const projectRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const extensionRoot = resolve(projectRoot, 'extension');
 const outputDirectory = resolve(extensionRoot, 'dist');
+const packageJson = JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8'));
+const manifest = JSON.parse(readFileSync(resolve(extensionRoot, 'manifest.json'), 'utf8'));
+
+if (manifest.version !== packageJson.version) {
+  throw new Error(
+    `Extension manifest version ${manifest.version} does not match package version ${packageJson.version}.`
+  );
+}
 
 rmSync(outputDirectory, { recursive: true, force: true });
 mkdirSync(outputDirectory, { recursive: true });

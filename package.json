@@ -29,6 +29,7 @@
     "prebuild": "npm run clean",
     "build": "tsc -p tsconfig.build.json",
     "build:extension": "node scripts/build-extension.mjs",
+    "package:extension": "npm run build:extension && node scripts/package-extension.mjs",
     "dev": "tsx watch src/cli/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",

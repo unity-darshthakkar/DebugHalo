@@ -43,6 +43,16 @@ export interface SiteAdapterConfig {
   sendButtonSelectors: ReadonlyArray<string>;
   extractComposerText?: (composer: Element) => string;
   replaceComposerText?: (composer: HTMLElement, text: string) => void;
+  findComposerForSendControl?: (
+    document: Document,
+    control: HTMLElement,
+    composerSelector: string
+  ) => HTMLElement | null;
+  findSendControlForComposer?: (
+    document: Document,
+    composer: HTMLElement,
+    sendButtonSelector: string
+  ) => HTMLElement | null;
 }
 
 export function extractComposerText(composer: Element): string {
@@ -94,6 +104,8 @@ export function installSiteProtection(
   const sendButtonSelector = config.sendButtonSelectors.join(',');
   const extractText = config.extractComposerText ?? extractComposerText;
   const replaceText = config.replaceComposerText ?? replaceComposerText;
+  const findComposerForSendControl = config.findComposerForSendControl ?? findComposer;
+  const findSendControlForComposer = config.findSendControlForComposer ?? findSendButton;
   const scan = options.scan ?? scanText;
   const sanitize = options.sanitize ?? sanitizeText;
   const presentReview = options.presentReview ?? ((request) => showReview(document, request));
@@ -145,13 +157,15 @@ export function installSiteProtection(
     }
 
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
-    const currentComposer = document.querySelector(composerSelector) as HTMLElement | null;
+    const currentComposer = composer.isConnected ? composer : null;
     if (!currentComposer || extractText(currentComposer) !== decision.sanitizedText) {
       notifyComposerChanged();
       return;
     }
     void recordEvent('messagesSanitized');
-    resume(findSendButton(document, currentComposer, sendButtonSelector) ?? currentComposer);
+    resume(
+      findSendControlForComposer(document, currentComposer, sendButtonSelector) ?? currentComposer
+    );
   };
 
   const protect = async (event: Event, composer: HTMLElement, resumeTarget: HTMLElement) => {
@@ -159,12 +173,13 @@ export function installSiteProtection(
     const policy = getPolicy();
     if (!policy.protectionEnabled) return;
 
+    const pendingText = extractText(composer);
+    if (!pendingText.trim()) return;
+
     event.preventDefault();
     event.stopImmediatePropagation();
     if (pending) return;
 
-    const pendingText = extractText(composer);
-    if (!pendingText.trim()) return;
     pending = true;
 
     try {
@@ -205,7 +220,7 @@ export function installSiteProtection(
   const onClick = (event: MouseEvent): void => {
     const button = closestElement(event.target, sendButtonSelector);
     if (!(button instanceof HTMLElement)) return;
-    const composer = findComposer(document, button, composerSelector);
+    const composer = findComposerForSendControl(document, button, composerSelector);
     if (!composer) return;
     void protect(event, composer, button);
   };
@@ -214,7 +229,7 @@ export function installSiteProtection(
     if (!isSendKey(event)) return;
     const composer = closestElement(event.target, composerSelector);
     if (!(composer instanceof HTMLElement)) return;
-    const button = findSendButton(document, composer, sendButtonSelector);
+    const button = findSendControlForComposer(document, composer, sendButtonSelector);
     void protect(event, composer, button ?? composer);
   };
 
@@ -239,19 +254,19 @@ function closestElement(target: EventTarget | null, selector: string): Element |
 }
 
 function findComposer(
-  document: Document,
+  _document: Document,
   button: Element,
   composerSelector: string
 ): HTMLElement | null {
-  const formComposer = button.closest('form')?.querySelector(composerSelector);
-  return (formComposer ?? document.querySelector(composerSelector)) as HTMLElement | null;
+  return (button.closest('form')?.querySelector(composerSelector) as HTMLElement | null) ?? null;
 }
 
 function findSendButton(
-  document: Document,
+  _document: Document,
   composer: Element,
   sendButtonSelector: string
 ): HTMLElement | null {
-  const formButton = composer.closest('form')?.querySelector(sendButtonSelector);
-  return (formButton ?? document.querySelector(sendButtonSelector)) as HTMLElement | null;
+  return (
+    (composer.closest('form')?.querySelector(sendButtonSelector) as HTMLElement | null) ?? null
+  );
 }

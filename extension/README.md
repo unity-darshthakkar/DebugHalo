@@ -6,12 +6,34 @@ DebugHalo core and performs all scanning locally.
 ## Build and load
 
 ```bash
+npm ci
 npm run typecheck:extension
 npm run build:extension
 ```
 
 Open `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select
 `extension/dist`.
+
+## Package a release ZIP
+
+```bash
+npm run package:extension
+```
+
+This rebuilds the extension and writes `artifacts/debughalo-extension-<version>.zip`. The archive
+contains only the eight runtime files at its root. Development source maps remain in `extension/dist`
+for unpacked debugging and are intentionally excluded from the ZIP. The package version and manifest
+version must match or the build fails.
+
+## Demo walkthrough
+
+Use fake credentials only.
+
+1. Open ChatGPT and enter a realistic fake AWS credential.
+2. Attempt to send and observe DebugHalo block the original message.
+3. Choose **Sanitize** and review the alias-based replacement.
+4. Choose **Confirm Sanitized Send** and verify it sends exactly once.
+5. Open the popup and verify the scanned, blocked, and sanitized counters incremented.
 
 ## Manual site validation
 
@@ -58,6 +80,17 @@ For each site, also verify the submission safety workflow:
 14. Confirm Shift+Enter creates a newline without opening the review.
 15. Navigate to another or new conversation and repeat a protected submission.
 
+ChatGPT-specific release checks:
+
+1. Create a new Project and confirm DebugHalo does not intercept the dialog, button, or form and
+   does not change counters.
+2. Send a harmless image with an empty composer, then a harmless document with an empty composer;
+   confirm both native attachment-only submissions work and are not counted as scanned.
+3. Attach a harmless file with clean text; confirm the text is scanned once and the attachment sends
+   intact.
+4. Attach a harmless file with a fake credential; test Cancel, Send Anyway, and Sanitize → Preview →
+   Confirm, verifying the attachment remains attached and each approved submission occurs once.
+
 ## Current scope
 
 ChatGPT, Claude, and Gemini text submission through their normal Send button or Enter key is
@@ -76,3 +109,21 @@ Credential- and PII-specific toggles are not exposed because the current browser
 provide clean category-selective execution; the popup does not present controls it cannot enforce.
 File attachments, restoration, an extension vault, other AI sites, and persistent statistics are
 intentionally deferred.
+
+## Known limitations
+
+- Chrome and Chromium browsers are the supported browser targets.
+- Protection covers text submitted through the supported site composers only.
+- File and image attachments are not scanned.
+- Only ChatGPT, Claude, and Gemini are supported.
+- Upstream site DOM changes may require adapter selector updates.
+
+## Release checklist
+
+- Confirm the working tree contains only intended release changes.
+- Run `npm ci` and the complete format, lint, typecheck, test, build, package-smoke, and audit suite.
+- Run `npm run package:extension` and inspect the ZIP contents and version.
+- Load `extension/dist` unpacked without manifest or service-worker errors.
+- Run clean, sensitive, sanitize-confirm, and Send Anyway checks on ChatGPT, Claude, and Gemini.
+- Verify SPA navigation, Protection OFF/ON, all detection modes, and popup counters.
+- Inspect local/session extension storage and confirm only preferences and numeric counters exist.
