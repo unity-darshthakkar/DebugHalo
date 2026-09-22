@@ -112,6 +112,7 @@ Its popup controls protection, detection behavior, and safe session counters. Ch
 Gemini content scripts check outgoing composer text when the user clicks Send or presses Enter:
 
 ```bash
+npm ci
 npm run typecheck:extension
 npm run build:extension
 ```
@@ -132,6 +133,18 @@ The popup offers persistent Protection ON/OFF and on-detection preferences: **As
 preview and still requires confirmation. Safe numeric counters use session-scoped extension storage
 and reset when the browser session ends. The extension requests only the `storage` permission in
 addition to its four exact host permissions.
+
+To create the release ZIP, run `npm run package:extension`. The versioned archive is written beneath
+`artifacts/` and contains only the manifest, popup assets, service worker, and three content-script
+bundles. Source maps remain available in `extension/dist` for local debugging but are excluded from
+the release archive.
+
+### Extension demo
+
+Use fake credentials only. Open a supported site, enter a realistic fake AWS credential, and attempt
+to send. DebugHalo blocks the original message; choose **Sanitize**, review the alias replacement,
+then choose **Confirm Sanitized Send**. The sanitized message sends once, and the popup reports the
+scan, block, and confirmed sanitization in its session counters.
 
 ## 📖 Commands
 
@@ -597,8 +610,8 @@ runs the upload step even when the scan reports findings.
 - **Plaintext local vault** — Reversible mappings are local and deliberately not encrypted
 - **UTF-8 text only** — Arbitrary text encodings are not supported
 - **No YAML config** — Only `.debughalo.json` supported
-- **No Chrome extension** — CLI only
-- **No AI integrations** — Standalone detector/sanitizer
+- **Browser scope** — The extension supports Chrome/Chromium and three AI chat sites only
+- **Text composers only** — File and image attachments are not scanned
 - **Limited detector set** — Covers common secret types; not exhaustive
 - **Opt-in cache only** — Normal scans reprocess selected files unless `--cache` is supplied; staged scans intentionally bypass the filesystem cache
 

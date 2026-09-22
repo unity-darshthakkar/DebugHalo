@@ -75,6 +75,31 @@ afterEach(() => {
 });
 
 describe.each(sites)('$name adapter', (site) => {
+  it('ignores unrelated send-like controls outside the composer form', () => {
+    mount(site, 'chat text');
+    document.body.insertAdjacentHTML(
+      'afterbegin',
+      '<form id="unrelated"><button aria-label="Send message" type="button">Unrelated</button></form>'
+    );
+    const scan = vi.fn();
+    protection = site.install(document, { scan });
+
+    document.querySelector<HTMLButtonElement>('#unrelated button')!.click();
+    expect(scan).not.toHaveBeenCalled();
+  });
+
+  it('allows empty composer submissions without scanning', () => {
+    mount(site, '');
+    const scan = vi.fn();
+    protection = site.install(document, { scan });
+    let sends = 0;
+    sendButton(site).addEventListener('click', () => sends++);
+
+    sendButton(site).click();
+    expect(sends).toBe(1);
+    expect(scan).not.toHaveBeenCalled();
+  });
+
   it('extracts its contenteditable composer text', () => {
     mount(site, 'site composer text');
     expect(site.extract(composer(site))).toBe('site composer text');

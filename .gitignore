@@ -5,6 +5,7 @@ node_modules/
 dist/
 build/
 extension/dist/
+artifacts/
 *.tsbuildinfo
 
 # Test coverage
