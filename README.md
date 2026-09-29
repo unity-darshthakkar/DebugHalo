@@ -146,7 +146,8 @@ npm run website:build
 ```
 
 See [website/README.md](./website/README.md) for deployment details. Release download links are
-centralized in `website/src/release.ts`.
+centralized in `website/src/release.ts`. Pushes to `master` deploy the site to
+[GitHub Pages](https://unity-darshthakkar.github.io/DebugHalo/) through the Pages Actions workflow.
 
 To create the release ZIP, run `npm run package:extension`. The versioned archive is written beneath
 `artifacts/` and contains only the manifest, popup assets, service worker, and three content-script
