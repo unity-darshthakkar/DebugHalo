@@ -4,6 +4,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
+    "jsx": "react-jsx",
     "outDir": "./dist",
     "rootDir": ".",
     "declaration": true,
@@ -39,5 +40,5 @@
     }
   },
   "include": ["**/*"],
-  "exclude": ["node_modules", "dist", "coverage", "extension"]
+  "exclude": ["node_modules", "dist", "coverage", "extension", "website"]
 }
