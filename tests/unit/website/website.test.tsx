@@ -40,18 +40,51 @@ describe('DebugHalo product website', () => {
     );
     expect(downloads.length).toBeGreaterThanOrEqual(3);
     expect(downloads.every((link) => link.href === release.downloadUrl)).toBe(true);
-    expect(document.body.textContent).toContain('Latest stable · v1.1.1');
+    expect(document.body.textContent).toContain('Latest stable: v1.1.1');
+    expect(document.querySelector('#install')?.textContent).toContain('Latest stable: v1.1.1');
+    expect(document.querySelector('#top')?.textContent).not.toContain('Latest stable');
+    expect(document.querySelector('#top')?.textContent).not.toContain('AKIAIOSFODNN7EXAMPLE');
+    expect(document.querySelector('#top')?.textContent).toContain(
+      'Local-first. No message content sent to DebugHalo servers.'
+    );
   });
 
-  it('renders supported sites, manual installation, and the attachment limitation', () => {
+  it('renders factual trust signals and current scope limitations', () => {
+    render();
+    expect(document.body.textContent).toContain('Local scanning');
+    expect(document.body.textContent).toContain('Open source');
+    expect(document.body.textContent).toContain('No message telemetry');
+    expect(document.body.textContent).toContain('600+');
+    expect(document.body.textContent).toContain('production dependency vulnerabilities');
+    expect(document.body.textContent).toContain('File attachment contents');
+    expect(document.body.textContent).toContain('Image contents');
+    expect(document.body.textContent).toContain('Arbitrary desktop applications');
+    expect(document.body.textContent).toContain('Unsupported AI sites');
+    for (const roadmapItem of [
+      'Attachment scanning',
+      'Response restoration',
+      'Local extension vault',
+      'VS Code integration',
+      'Desktop protection',
+      'Additional AI platforms',
+    ]) {
+      expect(document.querySelector('#roadmap')?.textContent).toContain(roadmapItem);
+    }
+  });
+
+  it('renders supported sites and explains the manual installation requirement', () => {
     render();
     expect(document.body.textContent).toContain('ChatGPT');
     expect(document.body.textContent).toContain('Claude');
     expect(document.body.textContent).toContain('Gemini');
+    expect(document.body.textContent).toContain('Live text protection');
     expect(document.body.textContent).toContain('chrome://extensions');
     expect(document.body.textContent).toContain('Load unpacked');
     expect(document.body.textContent).toContain(
-      'File and image attachment contents are not scanned in the current release.'
+      'Developer mode is currently required because DebugHalo is not yet published in the Chrome Web Store.'
+    );
+    expect(document.body.textContent).toContain(
+      'Downloads come directly from the official DebugHalo GitHub Release.'
     );
   });
 
@@ -60,16 +93,20 @@ describe('DebugHalo product website', () => {
     render();
     const send = button('Send');
     act(() => send.click());
+    expect(document.body.textContent).toContain('Local scan in progress');
     await act(async () => vi.advanceTimersByTime(600));
 
     const review = document.querySelector<HTMLElement>('[data-testid="review-card"]')!;
+    expect(document.body.textContent).toContain('Credential detected · submission blocked');
     expect(review.textContent).toContain('AWS Access Key');
     expect(review.textContent).toContain('HIGH');
     expect(review.textContent).not.toContain('AKIAIOSFODNN7EXAMPLE');
 
     act(() => button('Sanitize').click());
+    expect(document.body.textContent).toContain('Safe alias ready for confirmation');
     expect(review.textContent).toContain(SANITIZED_MESSAGE);
     act(() => button('Confirm sanitized send').click());
+    expect(document.body.textContent).toContain('Sanitized message sent');
     expect(document.querySelector('[data-testid="sent-message"]')?.textContent).toContain(
       SANITIZED_MESSAGE
     );

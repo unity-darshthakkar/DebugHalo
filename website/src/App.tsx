@@ -15,7 +15,7 @@ const features = [
 ] as const;
 
 const installSteps = [
-  ['Download', 'Get the latest signed-off ZIP from the official GitHub release.'],
+  ['Download', 'Get the latest versioned ZIP from the official GitHub release.'],
   ['Extract', 'Unzip the archive into a stable folder on your computer.'],
   ['Open extensions', 'Navigate to chrome://extensions in Chrome or Chromium.'],
   ['Developer mode', 'Enable the Developer mode toggle in the top-right corner.'],
@@ -32,17 +32,59 @@ const workflow = [
   'Send',
 ];
 
+const trustItems = [
+  'Local scanning',
+  'Open source',
+  'No message telemetry',
+  'MIT licensed',
+] as const;
+
+const proofItems = [
+  ['600+', 'automated tests'],
+  ['3', 'supported AI platforms'],
+  ['0', 'production dependency vulnerabilities'],
+  ['MIT', 'open-source license'],
+] as const;
+
+const reasons = [
+  [
+    'Local-first by design',
+    'Composer text is inspected in your browser—not by a DebugHalo cloud service.',
+  ],
+  ['Transparent', 'The implementation is open source, inspectable, and backed by automated tests.'],
+  ['User-controlled', 'Review, sanitize, block, or explicitly approve a sensitive submission.'],
+  [
+    'Built for AI workflows',
+    'Focused protection for text sent through ChatGPT, Claude, and Gemini.',
+  ],
+] as const;
+
+const caughtExamples = [
+  ['API keys', 'AKIA…EXAMPLE'],
+  ['Bearer tokens', 'Bearer <TOKEN>'],
+  ['Database URLs', 'postgres://user:<PASSWORD>@host'],
+  ['Email addresses', '<EMAIL_1>'],
+  ['Internal URLs', 'https://<INTERNAL_HOST>/api'],
+  ['Service credentials', 'client_secret=<SECRET>'],
+] as const;
+
 export function App() {
   return (
     <>
       <Navbar />
       <main>
         <Hero />
+        <TrustStrip />
         <Demo />
+        <DemoCta />
         <Workflow />
+        <WhyDebugHalo />
+        <Catches />
         <Features />
         <Supported />
+        <Architecture />
         <Privacy />
+        <ScopeLimits />
         <Install />
         <Cli />
         <Roadmap />
@@ -55,6 +97,7 @@ export function App() {
 
 function Navbar() {
   const [open, setOpen] = useState(false);
+  const [active, setActive] = useState('');
   const links = [
     ['How it works', '#how-it-works'],
     ['Features', '#features'],
@@ -62,6 +105,21 @@ function Navbar() {
     ['Privacy', '#privacy'],
     ['Install', '#install'],
   ] as const;
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) return;
+    const sections = links
+      .map(([, href]) => document.querySelector<HTMLElement>(href))
+      .filter((section): section is HTMLElement => Boolean(section));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.find((entry) => entry.isIntersecting);
+        if (visible) setActive(`#${visible.target.id}`);
+      },
+      { rootMargin: '-25% 0px -65%', threshold: 0 }
+    );
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
   return (
     <header className="nav-shell">
       <nav className="nav wrap" aria-label="Primary navigation">
@@ -73,20 +131,24 @@ function Navbar() {
           type="button"
           aria-label="Toggle navigation"
           aria-expanded={open}
+          aria-controls="primary-links"
           onClick={() => setOpen(!open)}
         >
           <span /> <span />
         </button>
-        <div className={`nav-links ${open ? 'open' : ''}`}>
+        <div className={`nav-links ${open ? 'open' : ''}`} id="primary-links">
           {links.map(([label, href]) => (
-            <a key={href} href={href} onClick={() => setOpen(false)}>
+            <a
+              key={href}
+              href={href}
+              aria-current={active === href ? 'location' : undefined}
+              onClick={() => setOpen(false)}
+            >
               {label}
             </a>
           ))}
           <ExternalLink href={release.repositoryUrl}>GitHub</ExternalLink>
-          <a className="button small" href={release.downloadUrl} onClick={() => setOpen(false)}>
-            Download Extension
-          </a>
+          <DownloadButton className="button small" onClick={() => setOpen(false)} />
         </div>
       </nav>
     </header>
@@ -108,9 +170,7 @@ function Hero() {
           information before it reaches ChatGPT, Claude, or Gemini.
         </p>
         <div className="hero-actions">
-          <a className="button" href={release.downloadUrl}>
-            <DownloadIcon /> Download Extension
-          </a>
+          <DownloadButton className="button" icon />
           <ExternalLink className="button secondary" href={release.repositoryUrl}>
             <GithubIcon /> View on GitHub
           </ExternalLink>
@@ -140,6 +200,18 @@ function Hero() {
         </div>
         <div className="grid-glow" />
       </div>
+    </section>
+  );
+}
+
+function TrustStrip() {
+  return (
+    <section className="trust-strip wrap" aria-label="Product trust signals">
+      {trustItems.map((item) => (
+        <div key={item}>
+          <CheckIcon /> <span>{item}</span>
+        </div>
+      ))}
     </section>
   );
 }
@@ -179,6 +251,14 @@ function Demo() {
     setState('ready');
   };
 
+  const stage = {
+    ready: ['01', 'Sensitive text entered'],
+    scanning: ['02', 'Local scan in progress'],
+    blocked: ['03', 'Credential detected · submission blocked'],
+    preview: ['04', 'Safe alias ready for confirmation'],
+    sent: ['05', 'Sanitized message sent'],
+  }[state];
+
   return (
     <Section
       id="demo"
@@ -187,6 +267,17 @@ function Demo() {
       intro="A safe, deterministic simulation of the extension workflow. The credential below is a public test value."
     >
       <div className="demo-frame" data-testid="product-demo">
+        <div className="demo-progress" aria-live="polite">
+          <span>{stage[0]}</span>
+          <strong>{stage[1]}</strong>
+          <div aria-hidden="true">
+            <i
+              style={{
+                width: `${(['ready', 'scanning', 'blocked', 'preview', 'sent'].indexOf(state) + 1) * 20}%`,
+              }}
+            />
+          </div>
+        </div>
         <div className="demo-topbar">
           <span />
           <span />
@@ -300,6 +391,18 @@ function Demo() {
   );
 }
 
+function DemoCta() {
+  return (
+    <div className="demo-cta wrap">
+      <div>
+        <strong>Put the checkpoint in your real AI workflow.</strong>
+        <span>Add the extension to supported chats in a few deliberate steps.</span>
+      </div>
+      <DownloadButton className="button" label="Download Extension" icon />
+    </div>
+  );
+}
+
 function Workflow() {
   return (
     <Section
@@ -317,6 +420,80 @@ function Workflow() {
           </li>
         ))}
       </ol>
+    </Section>
+  );
+}
+
+function WhyDebugHalo() {
+  return (
+    <Section
+      id="why"
+      kicker="Why DebugHalo"
+      title="Security you can see and control"
+      intro="Clear findings and explicit choices make protection understandable—not invisible."
+    >
+      <div className="reason-grid">
+        {reasons.map(([title, body], index) => (
+          <Reveal key={title}>
+            <article className={`reason-card ${index === 0 ? 'primary' : ''}`}>
+              <div className="reason-topline">
+                <span className="reason-marker">
+                  <ReasonIcon index={index} />
+                </span>
+                <span className="reason-number">0{index + 1}</span>
+              </div>
+              <h3>{title}</h3>
+              <p>{body}</p>
+            </article>
+          </Reveal>
+        ))}
+      </div>
+      <TechnicalProof />
+    </Section>
+  );
+}
+
+function ReasonIcon({ index }: { index: number }) {
+  if (index === 0) return <LockIcon />;
+  if (index === 1) return <GithubIcon />;
+  if (index === 2) return <CheckIcon />;
+  return <ArrowIcon />;
+}
+
+function TechnicalProof() {
+  return (
+    <div className="proof-strip" aria-label="DebugHalo technical validation">
+      {proofItems.map(([value, label]) => (
+        <div key={label}>
+          <strong>{value}</strong>
+          <span>{label}</span>
+        </div>
+      ))}
+      <ExternalLink href={release.repositoryUrl}>
+        Verify on GitHub <ArrowIcon />
+      </ExternalLink>
+    </div>
+  );
+}
+
+function Catches() {
+  return (
+    <Section
+      id="coverage"
+      kicker="Detection coverage"
+      title="What DebugHalo catches"
+      intro="Purpose-built detectors recognize high-value secret and sensitive-data categories without exposing real credentials in this page."
+    >
+      <div className="catch-grid">
+        {caughtExamples.map(([category, example]) => (
+          <article key={category}>
+            <span>
+              <ShieldIcon /> {category}
+            </span>
+            <code>{example}</code>
+          </article>
+        ))}
+      </div>
     </Section>
   );
 }
@@ -352,7 +529,7 @@ function Supported() {
       id="supported"
       kicker="Supported AI"
       title="Protection where you already work"
-      intro="One local protection model across the currently supported browser experiences."
+      intro="Consistent review and sanitization across three supported browser experiences."
     >
       <div className="platform-grid">
         <Platform name="ChatGPT" letter="O" detail="chatgpt.com" />
@@ -369,16 +546,51 @@ function Supported() {
 
 function Platform({ name, letter, detail }: { name: string; letter: string; detail: string }) {
   return (
-    <article className="platform">
+    <article className={`platform platform-${name.toLowerCase()}`}>
       <div className="platform-mark">{letter}</div>
       <div>
         <h3>{name}</h3>
         <p>{detail}</p>
+        <ul>
+          <li>Live text protection</li>
+          <li>Review and sanitize</li>
+        </ul>
       </div>
       <span>
-        <CheckIcon /> Supported
+        <CheckIcon /> Protection ready
       </span>
     </article>
+  );
+}
+
+function Architecture() {
+  const steps = [
+    'User types',
+    'DebugHalo extension',
+    'Local scan',
+    'Review / sanitize',
+    'AI provider',
+  ];
+  return (
+    <Section
+      id="architecture"
+      kicker="Local protection path"
+      title="A checkpoint before the provider"
+      intro="DebugHalo processes supported composer text locally before an approved submission continues to the AI site."
+    >
+      <ol className="architecture-flow">
+        {steps.map((step, index) => (
+          <li key={step} className={step === 'Local scan' ? 'local-step' : ''}>
+            <span>{index + 1}</span>
+            <strong>{step}</strong>
+            {index < steps.length - 1 && <ArrowIcon />}
+          </li>
+        ))}
+      </ol>
+      <p className="architecture-note">
+        <LockIcon /> Sensitive content stays inside the browser during DebugHalo processing.
+      </p>
+    </Section>
   );
 }
 
@@ -429,12 +641,33 @@ function Privacy() {
           </div>
         </div>
       </div>
-      <div className="wrap limitation">
-        <strong>Current scope</strong>
-        <p>
-          DebugHalo scans supported text composers. File and image attachment contents are not
-          scanned in the current release.
-        </p>
+    </section>
+  );
+}
+
+function ScopeLimits() {
+  const limits = [
+    'File attachment contents',
+    'Image contents',
+    'Arbitrary desktop applications',
+    'Unsupported AI sites',
+  ];
+  return (
+    <section className="scope-section wrap" aria-labelledby="scope-title">
+      <div>
+        <span className="section-kicker">Current scope</span>
+        <h2 id="scope-title">Focused on supported text composers today.</h2>
+        <p>DebugHalo currently protects text composer content on supported AI sites.</p>
+      </div>
+      <div className="scope-card">
+        <strong>Not scanned yet</strong>
+        <ul>
+          {limits.map((limit) => (
+            <li key={limit}>
+              <InfoIcon /> {limit}
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   );
@@ -450,18 +683,24 @@ function Install() {
     >
       <div className="download-card">
         <div>
-          <span className="release-pill">Latest stable · {release.version}</span>
-          <h3>DebugHalo for Chrome / Chromium</h3>
-          <p>{release.fileName} · Official GitHub Release</p>
+          <span className="release-pill">Latest stable: {release.version}</span>
+          <h3>DebugHalo Browser Extension</h3>
+          <p>Chrome / Chromium · Manual install required</p>
+          <small>Downloads come directly from the official DebugHalo GitHub Release.</small>
         </div>
         <div className="download-actions">
-          <a className="button" href={release.downloadUrl}>
-            <DownloadIcon /> Download ZIP
-          </a>
+          <DownloadButton className="button" label="Download for Chrome / Chromium" icon />
           <ExternalLink href={release.releaseUrl}>
-            Release notes <ArrowIcon />
+            View release notes <ArrowIcon />
           </ExternalLink>
         </div>
+      </div>
+      <div className="artifact-row">
+        <span>Release artifact</span>
+        <code>{release.fileName}</code>
+        <ExternalLink href={release.releaseUrl}>
+          Verify release <ArrowIcon />
+        </ExternalLink>
       </div>
       <ol className="install-grid">
         {installSteps.map(([title, body], index) => (
@@ -474,9 +713,16 @@ function Install() {
         ))}
       </ol>
       <p className="install-note">
-        <InfoIcon /> Manual installation is the current method. This flow is ready to become “Add to
-        Chrome” when an official store listing exists.
+        <InfoIcon /> Developer mode is currently required because DebugHalo is not yet published in
+        the Chrome Web Store.
       </p>
+      <div className="install-success">
+        <CheckIcon />
+        <div>
+          <strong>Installation complete</strong>
+          <span>DebugHalo is now protecting supported AI chats.</span>
+        </div>
+      </div>
     </Section>
   );
 }
@@ -553,9 +799,7 @@ function FinalCta() {
       <h2>Keep sensitive text on your side of send.</h2>
       <p>Local protection for ChatGPT, Claude, and Gemini.</p>
       <div className="hero-actions">
-        <a className="button" href={release.downloadUrl}>
-          <DownloadIcon /> Download {release.version}
-        </a>
+        <DownloadButton className="button" icon />
         <ExternalLink className="button secondary" href={release.repositoryUrl}>
           Explore the source
         </ExternalLink>
@@ -657,6 +901,24 @@ function ExternalLink({
   return (
     <a href={href} className={className} target="_blank" rel="noreferrer">
       {children}
+    </a>
+  );
+}
+
+function DownloadButton({
+  className,
+  label = 'Download Extension',
+  icon = false,
+  onClick,
+}: {
+  className?: string;
+  label?: string;
+  icon?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <a className={className} href={release.downloadUrl} onClick={onClick}>
+      {icon && <DownloadIcon />} {label}
     </a>
   );
 }
