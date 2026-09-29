@@ -134,6 +134,20 @@ preview and still requires confirmation. Safe numeric counters use session-scope
 and reset when the browser session ends. The extension requests only the `storage` permission in
 addition to its four exact host permissions.
 
+## Product website
+
+The static React website lives in `website/` and can be run independently:
+
+```bash
+npm run website:dev
+npm run website:typecheck
+npm run website:test
+npm run website:build
+```
+
+See [website/README.md](./website/README.md) for deployment details. Release download links are
+centralized in `website/src/release.ts`.
+
 To create the release ZIP, run `npm run package:extension`. The versioned archive is written beneath
 `artifacts/` and contains only the manifest, popup assets, service worker, and three content-script
 bundles. Source maps remain available in `extension/dist` for local debugging but are excluded from
